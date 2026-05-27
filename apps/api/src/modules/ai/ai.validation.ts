@@ -34,3 +34,18 @@ export const dosageCalculatorRequestSchema = z.object({
 });
 
 export type DosageCalculatorRequestDto = z.infer<typeof dosageCalculatorRequestSchema>;
+
+export const triageAssessmentSchema = z.object({
+  patientId: z.string(),
+  chiefComplaint: z.string().min(1).max(500),
+  symptoms: z.array(z.string()).min(1),
+  vitalSigns: z.object({
+    heartRate: z.number().optional(),
+    bloodPressure: z.string().optional(),
+    temperature: z.number().optional(),
+    oxygenSaturation: z.number().optional(),
+  }),
+  patientAge: z.number().min(0).max(150),
+  patientSex: z.enum(['M', 'F']),
+  onsetTime: z.string(),
+});
