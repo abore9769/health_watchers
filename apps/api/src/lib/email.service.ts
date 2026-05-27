@@ -270,3 +270,53 @@ export function sendUnrecognizedTransactionEmail(
   `;
   enqueue(to, `🔍 Unrecognized Transaction Detected — ${clinicName}`, text, html);
 }
+
+
+/** Portal MFA enabled notification sent to patient */
+export function sendPortalMfaEnabledEmail(to: string, patientName: string, method: 'totp' | 'sms'): void {
+  const methodLabel = method === 'totp' ? 'authenticator app' : 'SMS';
+  const portalUrl = `${APP_BASE_URL()}/portal/settings/security`;
+  const text = `Two-factor authentication (${methodLabel}) has been enabled on your Health Watchers patient portal account.\n\nIf you did not enable this, please contact support immediately.\n\nManage security settings: ${portalUrl}`;
+  const html = `
+    <h3>Portal Two-Factor Authentication Enabled</h3>
+    <p>Hello <strong>${patientName}</strong>,</p>
+    <p>Two-factor authentication using <strong>${methodLabel}</strong> has been enabled on your Health Watchers patient portal account.</p>
+    <p>You will be required to provide a verification code when logging in to your portal.</p>
+    <p style="color:#dc2626"><strong>If you did not enable this, please contact support immediately.</strong></p>
+    <p><a href="${portalUrl}">Manage Security Settings</a></p>
+  `;
+  enqueue(to, 'Portal Two-Factor Authentication Enabled — Health Watchers', text, html);
+}
+
+/** Portal MFA disabled notification sent to patient */
+export function sendPortalMfaDisabledEmail(to: string, patientName: string): void {
+  const portalUrl = `${APP_BASE_URL()}/portal/settings/security`;
+  const text = `Two-factor authentication has been disabled on your Health Watchers patient portal account.\n\nIf you did not disable this, please contact support immediately.\n\nManage security settings: ${portalUrl}`;
+  const html = `
+    <h3>Portal Two-Factor Authentication Disabled</h3>
+    <p>Hello <strong>${patientName}</strong>,</p>
+    <p>Two-factor authentication has been disabled on your Health Watchers patient portal account.</p>
+    <p style="color:#dc2626"><strong>If you did not disable this, please contact support immediately.</strong></p>
+    <p><a href="${portalUrl}">Manage Security Settings</a></p>
+  `;
+  enqueue(to, 'Portal Two-Factor Authentication Disabled — Health Watchers', text, html);
+}
+
+/** Portal MFA backup codes generated notification sent to patient */
+export function sendPortalMfaBackupCodesEmail(to: string, patientName: string, backupCodes: string[]): void {
+  const portalUrl = `${APP_BASE_URL()}/portal/settings/security`;
+  const codesHtml = backupCodes.map((code) => `<code style="background:#f3f4f6;padding:4px 8px;margin:4px;display:inline-block">${code}</code>`).join('');
+  const text = `Your backup codes for portal two-factor authentication have been generated. Keep these codes in a safe place.\n\nBackup codes:\n${backupCodes.join('\n')}\n\nManage security settings: ${portalUrl}`;
+  const html = `
+    <h3>Portal MFA Backup Codes Generated</h3>
+    <p>Hello <strong>${patientName}</strong>,</p>
+    <p>Your backup codes for portal two-factor authentication have been generated. Keep these codes in a safe place.</p>
+    <p><strong>Backup Codes:</strong></p>
+    <div style="background:#f9fafb;padding:16px;border-radius:6px;margin:16px 0;font-family:monospace">
+      ${codesHtml}
+    </div>
+    <p style="color:#dc2626"><strong>Important:</strong> Each code can only be used once. Store them securely.</p>
+    <p><a href="${portalUrl}">Manage Security Settings</a></p>
+  `;
+  enqueue(to, 'Portal MFA Backup Codes — Health Watchers', text, html);
+}

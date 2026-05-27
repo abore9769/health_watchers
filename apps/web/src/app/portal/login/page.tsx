@@ -15,7 +15,7 @@ export default function PortalLoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch('/api/portal/auth/login', {
+      const res = await fetch('/api/v1/portal/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, dateOfBirth }),
@@ -23,12 +23,23 @@ export default function PortalLoginPage() {
       const json = await res.json();
       if (!res.ok) {
         setError(json?.message ?? 'Invalid credentials. Please try again.');
+        setLoading(false);
         return;
       }
+
+      // Check if MFA is required
+      if (json.data.mfaRequired) {
+        localStorage.setItem('portalMfaTempToken', json.data.tempToken);
+        router.push(`/portal/mfa?method=${json.data.mfaMethod}`);
+        return;
+      }
+
+      // No MFA, set tokens and redirect
+      localStorage.setItem('portalAccessToken', json.data.accessToken);
+      localStorage.setItem('portalRefreshToken', json.data.refreshToken);
       router.push('/portal/dashboard');
     } catch {
       setError('Something went wrong. Please try again.');
-    } finally {
       setLoading(false);
     }
   };

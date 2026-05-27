@@ -11,14 +11,21 @@ import { PaymentRecordModel } from '../payments/models/payment-record.model';
 import { authenticate, requireRoles } from '@api/middlewares/auth.middleware';
 import { validateRequest } from '@api/middlewares/validate.middleware';
 import { asyncHandler } from '@api/utils/asyncHandler';
-import { signAccessToken, signRefreshToken, REFRESH_TOKEN_EXPIRY_MS } from '../auth/token.service';
+import { signAccessToken, signRefreshToken, signTempToken, verifyTempToken, REFRESH_TOKEN_EXPIRY_MS } from '../auth/token.service';
 import { RefreshTokenModel } from '../auth/models/refresh-token.model';
+import { portalMfaService } from './portal-mfa.service';
+import { smsOtpService } from './sms-otp.service';
 import crypto from 'crypto';
 const router = Router();
 
 const loginSchema = z.object({
   email: z.string().email(),
   dateOfBirth: z.string().min(1), // used as second factor to confirm identity
+});
+
+const portalMfaVerifySchema = z.object({
+  code: z.string().regex(/^\d{6}$/),
+  tempToken: z.string().min(1),
 });
 
 const requirePatient = requireRoles('PATIENT');
@@ -45,6 +52,100 @@ router.post(
     const storedDob = (patient as any).dateOfBirth as string;
     if (storedDob !== dateOfBirth) {
       return res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials' });
+    }
+
+    // Check if MFA is enabled
+    if (user.portalMfaEnabled) {
+      const tempToken = signTempToken(user._id.toString());
+      return res.json({
+        status: 'success',
+        data: {
+          mfaRequired: true,
+          tempToken,
+          mfaMethod: user.portalMfaMethod,
+        },
+      });
+    }
+
+    const payload = {
+      userId: String(user._id),
+      role: 'PATIENT',
+      clinicId: String(user.clinicId),
+      patientId: String(user.patientId),
+    };
+
+    const accessToken = signAccessToken(payload);
+    const { token: refreshToken, jti, family } = signRefreshToken(payload);
+
+    await RefreshTokenModel.create({
+      userId: user._id,
+      tokenHash: crypto.createHash('sha256').update(refreshToken).digest('hex'),
+      jti,
+      family,
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
+    });
+
+    return res.json({ status: 'success', data: { accessToken, refreshToken } });
+  }),
+);
+
+// ── POST /api/v1/portal/auth/mfa/verify-login ─────────────────────────────────
+/**
+ * Verify MFA code during portal login
+ */
+router.post(
+  '/auth/mfa/verify-login',
+  validateRequest({ body: portalMfaVerifySchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { code, tempToken } = req.body;
+
+    const userId = verifyTempToken(tempToken);
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid or expired temp token',
+      });
+    }
+
+    const user = await UserModel.findById(userId).select('+portalMfaSecret +portalMfaBackupCodes');
+    if (!user) {
+      return res.status(404).json({ error: 'NotFound', message: 'User not found' });
+    }
+
+    if (!user.portalMfaEnabled) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'MFA is not enabled for this account',
+      });
+    }
+
+    // Verify code (TOTP or backup code)
+    let isValid = false;
+
+    if (user.portalMfaMethod === 'totp' && user.portalMfaSecret) {
+      isValid = portalMfaService.verifyTotp(code, user.portalMfaSecret);
+    } else if (user.portalMfaMethod === 'sms' && user.portalPhoneNumber) {
+      isValid = smsOtpService.verifyOtp(user.portalPhoneNumber, code);
+    }
+
+    // Also check backup codes as fallback
+    if (!isValid && user.portalMfaBackupCodes) {
+      isValid = portalMfaService.verifyBackupCode(code, user.portalMfaBackupCodes);
+      if (isValid) {
+        // Remove used backup code
+        user.portalMfaBackupCodes = portalMfaService.removeUsedBackupCode(
+          code,
+          user.portalMfaBackupCodes
+        );
+        await user.save();
+      }
+    }
+
+    if (!isValid) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid verification code',
+      });
     }
 
     const payload = {
@@ -235,5 +336,10 @@ router.delete(
     return res.json({ status: 'success', data: entry });
   }),
 );
+
+// ── MFA Routes ────────────────────────────────────────────────────────────────
+// Import and use MFA routes
+import { portalMfaRoutes } from './portal-mfa.routes';
+router.use(portalMfaRoutes);
 
 export { router as portalRoutes };
