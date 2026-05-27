@@ -19,11 +19,14 @@ import {
   DifferentialDiagnosisRequestDto,
   dosageCalculatorRequestSchema,
   DosageCalculatorRequestDto,
-  clinicalCodingRequestSchema,
-  ClinicalCodingRequestDto,
+  triageAssessmentSchema,
 } from './ai.validation';
+import { assessTriage, addToTriageQueue, getTriageQueue, updateTriageStatus } from './triage.service';
 
 const router = Router();
+
+// Mount population health routes
+router.use('/', populationHealthRoutes);
 
 // GET /api/v1/ai/health
 router.get('/health', (_req, res) => res.json({ status: 'ok', service: 'ai' }));
@@ -564,73 +567,59 @@ router.post(
   }
 );
 
-// POST /api/v1/ai/suggest-codes
-// Request: { chiefComplaint, clinicalNotes, procedures? }
-// Returns: { diagnosisCodes, procedureCodes, disclaimer }
-router.post(
-  '/suggest-codes',
-  authenticate,
-  requireRoles('DOCTOR', 'CLINIC_ADMIN', 'SUPER_ADMIN'),
-  validateRequest({ body: clinicalCodingRequestSchema }),
-  async (req: Request, res: Response) => {
-    const startTime = Date.now();
-    try {
-      if (!isAIServiceAvailable()) {
-        return res.status(503).json({
-          error: 'AIUnavailable',
-          message: 'AI service is not configured. Please contact your administrator.',
-        });
-      }
-
-      const payload = req.body as ClinicalCodingRequestDto;
-      const result = await suggestClinicalCodes(payload);
-
-      const duration = Date.now() - startTime;
-      logger.info(
-        {
-          diagnosisCount: result.diagnosisCodes.length,
-          procedureCount: result.procedureCodes.length,
-          duration,
-        },
-        'Clinical codes suggested'
-      );
-
-      // Audit log — non-blocking
-      import('../audit/audit.service').then(({ auditLog }) =>
-        auditLog(
-          {
-            action: 'CLINICAL_CODING_SUGGESTION',
-            userId: req.user!.userId,
-            clinicId: req.user!.clinicId,
-            resourceType: 'encounter',
-            metadata: {
-              diagnosisCodeCount: result.diagnosisCodes.length,
-              procedureCodeCount: result.procedureCodes.length,
-              highConfidenceDiagnosis: result.diagnosisCodes.filter((c) => c.confidence === 'high').length,
-            },
-          },
-          req
-        )
-      ).catch(() => { /* non-critical */ });
-
-      return res.json({ success: true, ...result });
-    } catch (error: unknown) {
-      const duration = Date.now() - startTime;
-      logger.error({ err: error, duration }, 'AI suggest-codes error');
-
-      if (error instanceof Error && error.message.includes('Failed to suggest clinical codes')) {
-        return res.status(503).json({
-          error: 'AIServiceError',
-          message: 'Failed to suggest clinical codes. Please try again later.',
-        });
-      }
-
-      return res.status(500).json({
-        error: 'InternalServerError',
-        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+// POST /api/v1/ai/triage
+router.post('/triage', authenticate, validateRequest(triageAssessmentSchema), async (req: Request, res: Response) => {
+  try {
+    if (!isAIServiceAvailable()) {
+      return res.status(503).json({
+        error: 'AIUnavailable',
+        message: 'AI service is not configured.',
       });
     }
+
+    const triageResult = await assessTriage(req.body);
+    const queueEntry = await addToTriageQueue(
+      req.user!.clinicId,
+      req.body.patientId,
+      req.body,
+      triageResult
+    );
+
+    return res.json({ success: true, ...triageResult, queueId: queueEntry._id });
+  } catch (error: unknown) {
+    logger.error({ err: error }, 'Triage assessment error');
+    return res.status(500).json({
+      error: 'TriageError',
+      message: error instanceof Error ? error.message : 'Failed to assess triage',
+    });
   }
-);
+});
+
+// GET /api/v1/ai/triage/queue
+router.get('/triage/queue', authenticate, requireRoles(['CLINIC_ADMIN', 'NURSE']), async (req: Request, res: Response) => {
+  try {
+    const queue = await getTriageQueue(req.user!.clinicId);
+    return res.json({ success: true, queue });
+  } catch (error: unknown) {
+    logger.error({ err: error }, 'Triage queue fetch error');
+    return res.status(500).json({ error: 'InternalServerError' });
+  }
+});
+
+// PUT /api/v1/ai/triage/:id/status
+router.put('/triage/:id/status', authenticate, requireRoles(['CLINIC_ADMIN', 'NURSE']), async (req: Request, res: Response) => {
+  try {
+    const { status } = req.body;
+    if (!['pending', 'seen', 'discharged'].includes(status)) {
+      return res.status(400).json({ error: 'InvalidStatus' });
+    }
+
+    const updated = await updateTriageStatus(req.params.id, status);
+    return res.json({ success: true, data: updated });
+  } catch (error: unknown) {
+    logger.error({ err: error }, 'Triage status update error');
+    return res.status(500).json({ error: 'InternalServerError' });
+  }
+});
 
 export default router;

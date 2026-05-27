@@ -927,4 +927,144 @@ router.get(
   })
 );
 
+// ── Fraud Detection endpoints ─────────────────────────────────────────────────
+
+// GET /api/v1/payments/fraud-review
+router.get(
+  '/fraud-review',
+  authenticate,
+  requireRoles('CLINIC_ADMIN'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { fraudDetectionService } = await import('./services/fraud-detection.service');
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const alerts = await fraudDetectionService.getFraudReviewQueue(
+      req.user!.clinicId.toString(),
+      limit,
+      offset
+    );
+    return res.json({ status: 'success', data: alerts });
+  })
+);
+
+// POST /api/v1/payments/fraud-review/:alertId/approve
+router.post(
+  '/fraud-review/:alertId/approve',
+  authenticate,
+  requireRoles('CLINIC_ADMIN'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { fraudDetectionService } = await import('./services/fraud-detection.service');
+    const { notes } = req.body;
+
+    const alert = await fraudDetectionService.approveFraudAlert(
+      req.params.alertId,
+      req.user!.userId,
+      notes
+    );
+    return res.json({ status: 'success', data: alert });
+  })
+);
+
+// POST /api/v1/payments/fraud-review/:alertId/reject
+router.post(
+  '/fraud-review/:alertId/reject',
+  authenticate,
+  requireRoles('CLINIC_ADMIN'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { fraudDetectionService } = await import('./services/fraud-detection.service');
+    const { notes } = req.body;
+
+    const alert = await fraudDetectionService.rejectFraudAlert(
+      req.params.alertId,
+      req.user!.userId,
+      notes
+    );
+    return res.json({ status: 'success', data: alert });
+  })
+);
+
+// ── Compliance Reporting endpoints ────────────────────────────────────────────
+
+// GET /api/v1/compliance/report
+router.get(
+  '/compliance/report',
+  authenticate,
+  requireRoles('CLINIC_ADMIN'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { period, jurisdiction } = req.query;
+    if (!period || !jurisdiction) {
+      return res
+        .status(400)
+        .json({ error: 'BadRequest', message: 'period and jurisdiction required' });
+    }
+
+    const { complianceReportingService } = await import('./services/compliance-reporting.service');
+    const report = await complianceReportingService.getReport(
+      req.user!.clinicId.toString(),
+      period as string,
+      jurisdiction as string
+    );
+    if (!report) return res.status(404).json({ error: 'NotFound', message: 'Report not found' });
+    return res.json({ status: 'success', data: report });
+  })
+);
+
+// POST /api/v1/compliance/report/generate
+router.post(
+  '/compliance/report/generate',
+  authenticate,
+  requireRoles('CLINIC_ADMIN'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { period, jurisdiction } = req.body;
+    if (!period || !jurisdiction) {
+      return res
+        .status(400)
+        .json({ error: 'BadRequest', message: 'period and jurisdiction required' });
+    }
+
+    const { complianceReportingService } = await import('./services/compliance-reporting.service');
+    const report = await complianceReportingService.generateComplianceReport(
+      req.user!.clinicId.toString(),
+      period,
+      jurisdiction
+    );
+    return res.json({ status: 'success', data: report });
+  })
+);
+
+// POST /api/v1/compliance/report/:reportId/submit
+router.post(
+  '/compliance/report/:reportId/submit',
+  authenticate,
+  requireRoles('CLINIC_ADMIN'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { complianceReportingService } = await import('./services/compliance-reporting.service');
+    const report = await complianceReportingService.submitReport(
+      req.params.reportId,
+      req.user!.userId
+    );
+    return res.json({ status: 'success', data: report });
+  })
+);
+
+// GET /api/v1/compliance/reports
+router.get(
+  '/compliance/reports',
+  authenticate,
+  requireRoles('CLINIC_ADMIN'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const { complianceReportingService } = await import('./services/compliance-reporting.service');
+    const { reports, total } = await complianceReportingService.listReports(
+      req.user!.clinicId.toString(),
+      limit,
+      offset
+    );
+    return res.json({ status: 'success', data: reports, pagination: { limit, offset, total } });
+  })
+);
+
 export const paymentRoutes = router;

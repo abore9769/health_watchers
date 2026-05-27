@@ -103,7 +103,9 @@ router.get(
     const { page, limit } = pagination;
 
     // Sanitize: trim and cap at 100 chars (schema enforces max, this is belt-and-suspenders)
-    const q = String(req.query.q || '').trim().slice(0, 100);
+    const q = String(req.query.q || '')
+      .trim()
+      .slice(0, 100);
 
     const filter: Record<string, any> = { clinicId: req.user!.clinicId };
 
@@ -133,8 +135,10 @@ router.get(
     // Registration date range
     if (req.query.registeredAfter || req.query.registeredBefore) {
       filter.createdAt = {};
-      if (req.query.registeredAfter) filter.createdAt.$gte = new Date(req.query.registeredAfter as string);
-      if (req.query.registeredBefore) filter.createdAt.$lte = new Date(req.query.registeredBefore as string);
+      if (req.query.registeredAfter)
+        filter.createdAt.$gte = new Date(req.query.registeredAfter as string);
+      if (req.query.registeredBefore)
+        filter.createdAt.$lte = new Date(req.query.registeredBefore as string);
     }
 
     let data: any[];
@@ -205,7 +209,9 @@ router.post(
           searchName,
         })
     );
-    emitToClinic(String(clinicId || req.user!.clinicId), 'patient:created', { patientId: String(doc._id) });
+    emitToClinic(String(clinicId || req.user!.clinicId), 'patient:created', {
+      patientId: String(doc._id),
+    });
     patientsCreatedTotal.inc({ clinicId: clinicId || req.user!.clinicId });
     return res.status(201).json({ status: 'success', data: toPatientResponse(doc) });
   })
@@ -963,3 +969,66 @@ router.get(
     return res.json({ status: 'success', data: history });
   })
 );
+
+// ── Health Score endpoints ────────────────────────────────────────────────────
+
+// POST /api/v1/patients/:id/calculate-health-score
+router.post(
+  '/:id/calculate-health-score',
+  WRITE_ROLES,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { healthScoreService } = await import('./health-score.service');
+    const score = await healthScoreService.calculateHealthScore({
+      patientId: req.params.id,
+      clinicId: req.user!.clinicId.toString(),
+    });
+    return res.json({ status: 'success', data: { healthScore: score, calculatedAt: new Date() } });
+  })
+);
+
+// GET /api/v1/patients/:id/health-score
+router.get(
+  '/:id/health-score',
+  authenticate,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { healthScoreService } = await import('./health-score.service');
+    const healthScore = await healthScoreService.getHealthScore(req.params.id);
+    if (!healthScore)
+      return res.status(404).json({ error: 'NotFound', message: 'Health score not found' });
+    return res.json({ status: 'success', data: healthScore });
+  })
+);
+
+// GET /api/v1/patients/:id/health-score/history
+router.get(
+  '/:id/health-score/history',
+  authenticate,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { healthScoreService } = await import('./health-score.service');
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
+    const history = await healthScoreService.getHealthScoreHistory(req.params.id, limit);
+    return res.json({ status: 'success', data: { history } });
+  })
+);
+
+// POST /api/v1/patients/:id/interpret-health-score
+router.post(
+  '/:id/interpret-health-score',
+  authenticate,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { healthScoreService } = await import('./health-score.service');
+    const { aiService } = await import('../ai/ai.service');
+    const healthScore = await healthScoreService.getHealthScore(req.params.id);
+    if (!healthScore)
+      return res.status(404).json({ error: 'NotFound', message: 'Health score not found' });
+
+    const interpretation = await aiService.interpretHealthScore({
+      score: healthScore.healthScore,
+      factors:
+        healthScore.healthScoreHistory[healthScore.healthScoreHistory.length - 1]?.factors || [],
+    });
+    return res.json({ status: 'success', data: { interpretation } });
+  })
+);
+
+export const patientRoutes = router;

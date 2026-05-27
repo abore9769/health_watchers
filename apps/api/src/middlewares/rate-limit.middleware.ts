@@ -1,5 +1,6 @@
 import rateLimit, { type Options, type RateLimitRequestHandler } from 'express-rate-limit';
 import type { Request, Response } from 'express';
+import logger from '../utils/logger';
 
 // ── Retry-After handler ───────────────────────────────────────────────────────
 const makeHandler =
@@ -9,31 +10,49 @@ const makeHandler =
     res.status(429).json(message);
   };
 
-// ── Optional Redis store ──────────────────────────────────────────────────────
-// Falls back to in-memory when REDIS_URL is not set.
-async function buildStore() {
+// ── Redis store initialization ────────────────────────────────────────────────
+let redisStore: any = undefined;
+let redisInitialized = false;
+
+async function initializeRedisStore(): Promise<void> {
+  if (redisInitialized) return;
+  redisInitialized = true;
+
   const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) return undefined; // in-memory fallback
+  if (!redisUrl) {
+    logger.warn(
+      '[rate-limit] REDIS_URL not configured. Using in-memory store. ' +
+        'Multi-instance deployments are NOT protected against distributed brute-force attacks. ' +
+        'Set REDIS_URL for production deployments.'
+    );
+    return;
+  }
 
   try {
-    // @ts-expect-error -- 'redis' is an optional peer dependency; not installed in all environments
     const { createClient } = await import('redis');
-    // @ts-expect-error -- 'rate-limit-redis' is an optional peer dependency; not installed in all environments
     const { RedisStore } = await import('rate-limit-redis');
+
     const client = createClient({ url: redisUrl });
-    client.on('error', (err: Error) =>
-      console.error('[rate-limit] Redis error, falling back to in-memory:', err.message)
-    );
+    client.on('error', (err: Error) => {
+      logger.error('[rate-limit] Redis connection error:', err.message);
+      logger.warn('[rate-limit] Falling back to in-memory store for rate limiting');
+    });
+
     await client.connect();
-    return new RedisStore({ sendCommand: (...args: string[]) => client.sendCommand(args) });
-  } catch {
-    console.warn('[rate-limit] rate-limit-redis not installed, using in-memory store');
-    return undefined;
+    redisStore = new RedisStore({
+      sendCommand: (...args: string[]) => client.sendCommand(args),
+    });
+    logger.info('[rate-limit] Redis store initialized successfully');
+  } catch (err) {
+    logger.error('[rate-limit] Failed to initialize Redis store:', err instanceof Error ? err.message : String(err));
+    logger.warn('[rate-limit] Falling back to in-memory store. Multi-instance deployments are NOT protected.');
   }
 }
 
-// Shared store promise — resolved once at startup
-const storePromise = buildStore();
+// Initialize Redis on module load
+initializeRedisStore().catch((err) => {
+  logger.error('[rate-limit] Unexpected error during Redis initialization:', err);
+});
 
 function make(windowMs: number, max: number, message: object): RateLimitRequestHandler {
   return rateLimit({
@@ -43,31 +62,18 @@ function make(windowMs: number, max: number, message: object): RateLimitRequestH
     legacyHeaders: false,
     message,
     handler: makeHandler(windowMs, message),
-    // store is set lazily; in-memory is used until Redis resolves
-    store: undefined,
+    store: redisStore,
   });
 }
 
-// Attach Redis store once it resolves (no-op if undefined)
-storePromise.then((store) => {
-  if (store) {
-    [authLimiter, forgotPasswordLimiter, aiLimiter, paymentLimiter, generalLimiter].forEach(
-      (limiter) => {
-        // express-rate-limit exposes the store on the handler object
-        (limiter as any).store = store;
-      }
-    );
-  }
-});
-
-// ── Auth: 10 req / 15 min per IP ──────────────────────────────────────────────
-export const authLimiter: RateLimitRequestHandler = make(15 * 60 * 1000, 10, {
+// ── Auth: 5 req / 15 min per IP ───────────────────────────────────────────────
+export const authLimiter: RateLimitRequestHandler = make(15 * 60 * 1000, 5, {
   error: 'TooManyRequests',
   message: 'Too many login attempts. Try again in 15 minutes.',
 });
 
-// ── Forgot-password: 5 req / 1 hour per IP ───────────────────────────────────
-export const forgotPasswordLimiter: RateLimitRequestHandler = make(60 * 60 * 1000, 5, {
+// ── Forgot-password: 3 req / 1 hour per IP ───────────────────────────────────
+export const forgotPasswordLimiter: RateLimitRequestHandler = make(60 * 60 * 1000, 3, {
   error: 'TooManyRequests',
   message: 'Too many password reset requests. Try again in 1 hour.',
 });
@@ -84,6 +90,7 @@ export const aiLimiter: RateLimitRequestHandler = rateLimit({
     error: 'TooManyRequests',
     message: 'AI rate limit exceeded. Try again in 1 minute.',
   }),
+  store: redisStore,
 });
 
 // ── Payment intent: 20 req / 1 min per clinic ────────────────────────────────
@@ -101,9 +108,10 @@ export const paymentLimiter: RateLimitRequestHandler = rateLimit({
     error: 'TooManyRequests',
     message: 'Payment rate limit exceeded. Try again in 1 minute.',
   }),
+  store: redisStore,
 });
 
-// ── General: 300 req / 15 min per IP ─────────────────────────────────────────
+// ── General: 300 req / 15 min per IP ──────────────────────────────────────────
 export const generalLimiter: RateLimitRequestHandler = make(15 * 60 * 1000, 300, {
   error: 'TooManyRequests',
   message: 'Too many requests. Try again in 15 minutes.',

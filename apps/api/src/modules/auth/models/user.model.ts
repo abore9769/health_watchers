@@ -51,6 +51,7 @@ export interface User {
   lockedUntil?: Date; // brute-force protection
   mustChangePassword?: boolean; // Force password change on next login
   preferences: UserPreferences;
+  stellarPublicKey?: string; // Doctor's personal Stellar wallet for payment splits
 }
 
 const userSchema = new Schema(
@@ -128,6 +129,7 @@ const userSchema = new Schema(
         unrecognized_transaction: { type: Boolean, default: true },
       },
     },
+    stellarPublicKey: { type: String, sparse: true, index: true },
   },
   { timestamps: true, versionKey: false }
 );

@@ -1,0 +1,35 @@
+{
+  "name": "docs",
+  "version": "1.0.0",
+  "description": "Health Watchers documentation site",
+  "private": true,
+  "scripts": {
+    "dev": "docusaurus start",
+    "build": "docusaurus build",
+    "start": "docusaurus start",
+    "swizzle": "docusaurus swizzle",
+    "deploy": "docusaurus deploy",
+    "clear": "docusaurus clear",
+    "serve": "docusaurus serve",
+    "write-translations": "docusaurus write-translations",
+    "write-heading-ids": "docusaurus write-heading-ids"
+  },
+  "dependencies": {
+    "@docusaurus/core": "^3.0.0",
+    "@docusaurus/preset-classic": "^3.0.0",
+    "@docusaurus/plugin-openapi-docs": "^0.5.0",
+    "@docusaurus/theme-openapi-docs": "^0.5.0",
+    "docusaurus-plugin-openapi-docs": "^0.5.0",
+    "docusaurus-theme-openapi-docs": "^0.5.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "clsx": "^2.0.0",
+    "prism-react-renderer": "^2.1.0"
+  },
+  "devDependencies": {
+    "@docusaurus/module-validation-plugin": "^3.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
+}

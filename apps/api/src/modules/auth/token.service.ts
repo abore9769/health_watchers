@@ -49,7 +49,7 @@ export function signRefreshToken(payload: TokenPayload, family?: string): Refres
 }
 
 export function signTempToken(userId: string): string {
-  return jwt.sign({ userId }, config.jwt.accessTokenSecret, {
+  return jwt.sign({ userId }, config.jwt.tempTokenSecret, {
     expiresIn: TEMP_TOKEN_EXPIRY,
     issuer: JWT_ISSUER,
     audience: JWT_AUDIENCE,
@@ -99,7 +99,7 @@ export function verifyRefreshToken(token: string): RefreshTokenPayload | null {
 
 export function verifyTempToken(token: string): string | null {
   try {
-    const decoded = jwt.verify(token, config.jwt.accessTokenSecret, {
+    const decoded = jwt.verify(token, config.jwt.tempTokenSecret, {
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     }) as { userId: string };

@@ -25,6 +25,7 @@ export const config = {
   jwt: {
     accessTokenSecret: process.env.JWT_ACCESS_TOKEN_SECRET || '',
     refreshTokenSecret: process.env.JWT_REFRESH_TOKEN_SECRET || '',
+    tempTokenSecret: process.env.JWT_TEMP_TOKEN_SECRET || '',
     issuer: process.env.JWT_ISSUER || 'health-watchers-api',
     audience: process.env.JWT_AUDIENCE || 'health-watchers-client',
   },
