@@ -8,6 +8,7 @@ import {
   isAIServiceAvailable,
   AI_DISCLAIMER,
   calculateDosage,
+  suggestClinicalCodes,
 } from './ai.service';
 import { authenticate, requireRoles } from '../../middlewares/auth.middleware';
 import { validateRequest } from '../../middlewares/validate.middleware';
@@ -18,6 +19,8 @@ import {
   DifferentialDiagnosisRequestDto,
   dosageCalculatorRequestSchema,
   DosageCalculatorRequestDto,
+  clinicalCodingRequestSchema,
+  ClinicalCodingRequestDto,
 } from './ai.validation';
 
 const router = Router();
@@ -550,6 +553,75 @@ router.post(
         return res.status(503).json({
           error: 'AIServiceError',
           message: 'Failed to calculate dosage. Please try again later.',
+        });
+      }
+
+      return res.status(500).json({
+        error: 'InternalServerError',
+        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+      });
+    }
+  }
+);
+
+// POST /api/v1/ai/suggest-codes
+// Request: { chiefComplaint, clinicalNotes, procedures? }
+// Returns: { diagnosisCodes, procedureCodes, disclaimer }
+router.post(
+  '/suggest-codes',
+  authenticate,
+  requireRoles('DOCTOR', 'CLINIC_ADMIN', 'SUPER_ADMIN'),
+  validateRequest({ body: clinicalCodingRequestSchema }),
+  async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    try {
+      if (!isAIServiceAvailable()) {
+        return res.status(503).json({
+          error: 'AIUnavailable',
+          message: 'AI service is not configured. Please contact your administrator.',
+        });
+      }
+
+      const payload = req.body as ClinicalCodingRequestDto;
+      const result = await suggestClinicalCodes(payload);
+
+      const duration = Date.now() - startTime;
+      logger.info(
+        {
+          diagnosisCount: result.diagnosisCodes.length,
+          procedureCount: result.procedureCodes.length,
+          duration,
+        },
+        'Clinical codes suggested'
+      );
+
+      // Audit log — non-blocking
+      import('../audit/audit.service').then(({ auditLog }) =>
+        auditLog(
+          {
+            action: 'CLINICAL_CODING_SUGGESTION',
+            userId: req.user!.userId,
+            clinicId: req.user!.clinicId,
+            resourceType: 'encounter',
+            metadata: {
+              diagnosisCodeCount: result.diagnosisCodes.length,
+              procedureCodeCount: result.procedureCodes.length,
+              highConfidenceDiagnosis: result.diagnosisCodes.filter((c) => c.confidence === 'high').length,
+            },
+          },
+          req
+        )
+      ).catch(() => { /* non-critical */ });
+
+      return res.json({ success: true, ...result });
+    } catch (error: unknown) {
+      const duration = Date.now() - startTime;
+      logger.error({ err: error, duration }, 'AI suggest-codes error');
+
+      if (error instanceof Error && error.message.includes('Failed to suggest clinical codes')) {
+        return res.status(503).json({
+          error: 'AIServiceError',
+          message: 'Failed to suggest clinical codes. Please try again later.',
         });
       }
 

@@ -34,3 +34,11 @@ export const dosageCalculatorRequestSchema = z.object({
 });
 
 export type DosageCalculatorRequestDto = z.infer<typeof dosageCalculatorRequestSchema>;
+
+export const clinicalCodingRequestSchema = z.object({
+  chiefComplaint: z.string().trim().min(5).max(500),
+  clinicalNotes: z.string().trim().min(10).max(5000),
+  procedures: z.array(z.string().trim().min(2).max(200)).optional().default([]),
+});
+
+export type ClinicalCodingRequestDto = z.infer<typeof clinicalCodingRequestSchema>;
