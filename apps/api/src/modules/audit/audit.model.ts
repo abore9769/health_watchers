@@ -29,7 +29,9 @@ export type AuditAction =
   | 'PATIENT_PHOTO_ACCESS'
   | 'PATIENT_PHOTO_DELETE'
   | 'PAYMENT_EXPORT'
-  | 'DOSAGE_CALCULATION';
+  | 'DOSAGE_CALCULATION'
+  | 'CRITICAL_LAB_RESULT'
+  | 'CRITICAL_LAB_ACKNOWLEDGED';
 
 export interface AuditLog {
   userId?: Types.ObjectId;
@@ -39,6 +41,7 @@ export interface AuditLog {
   resourceId?: string;
   ipAddress?: string;
   userAgent?: string;
+  requestId?: string;
   outcome: 'SUCCESS' | 'FAILURE';
   metadata?: Record<string, unknown>;
   timestamp: Date;
@@ -81,6 +84,8 @@ const auditLogSchema = new Schema<AuditLog>(
         'PATIENT_PHOTO_DELETE',
         'PAYMENT_EXPORT',
         'DOSAGE_CALCULATION',
+        'CRITICAL_LAB_RESULT',
+        'CRITICAL_LAB_ACKNOWLEDGED',
       ],
       index: true,
     },
@@ -88,6 +93,7 @@ const auditLogSchema = new Schema<AuditLog>(
     resourceId: { type: String, required: false, index: true },
     ipAddress: { type: String, required: false },
     userAgent: { type: String, required: false },
+    requestId: { type: String, required: false, index: true },
     outcome: { type: String, enum: ['SUCCESS', 'FAILURE'], required: true, default: 'SUCCESS' },
     metadata: { type: Schema.Types.Mixed, required: false },
     timestamp: { type: Date, required: true, default: () => new Date(), index: true },

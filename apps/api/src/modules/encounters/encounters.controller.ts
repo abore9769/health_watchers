@@ -3,6 +3,7 @@ import { EncounterModel, Prescription } from './encounter.model';
 import { EncounterTemplateModel } from './encounter-template.model';
 import { toEncounterResponse } from './encounters.transformer';
 import { authenticate, requireRoles } from '@api/middlewares/auth.middleware';
+import { checkSubscriptionLimit } from '@api/middlewares/subscription.middleware';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { validateRequest } from '@api/middlewares/validate.middleware';
 import {
@@ -22,6 +23,7 @@ import { emitToClinic } from '@api/realtime/socket';
 import { encountersCreatedTotal } from '../../services/metrics.service';
 import cdsRulesEngine from '../cds/cds-rules-engine.js';
 import { EncounterValidationService } from './encounter-validation.service';
+import { incrementUsage } from '../subscriptions/usage.service';
 
 async function validateDiagnosisCodes(diagnoses?: { code: string }[]): Promise<string | null> {
   if (!diagnoses || diagnoses.length === 0) return null;
@@ -187,6 +189,7 @@ router.get(
 router.post(
   '/',
   requireRoles('DOCTOR', 'CLINIC_ADMIN', 'NURSE'),
+  checkSubscriptionLimit('encounters'),
   validateRequest({ body: createEncounterSchema }),
   asyncHandler(async (req: Request, res: Response) => {
     const validationService = new EncounterValidationService();
@@ -301,6 +304,7 @@ router.post(
     
     emitToClinic(req.user!.clinicId, 'encounter:created', { encounterId: String(doc._id), patientId: String(doc.patientId) });
     encountersCreatedTotal.inc({ clinicId: req.user!.clinicId });
+    await incrementUsage(req.user!.clinicId, 'encounterCount');
 
     // Evaluate CDS rules for encounter creation
     const patientContext = await cdsRulesEngine.getPatientContext(req.body.patientId, req.user!.clinicId);

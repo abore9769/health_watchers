@@ -7,6 +7,7 @@ import { paginate, parsePagination } from '../../utils/paginate';
 import { emitToClinic } from '@api/realtime/socket';
 import { authenticate, requireRoles } from '@api/middlewares/auth.middleware';
 import { validateRequest } from '@api/middlewares/validate.middleware';
+import { checkSubscriptionLimit } from '@api/middlewares/subscription.middleware';
 import { PaymentRecordModel } from '../payments/models/payment-record.model';
 import { toPaymentResponse } from '../payments/payments.transformer';
 import { EncounterModel } from '../encounters/encounter.model';
@@ -27,6 +28,7 @@ import {
 import { auditLog } from '../audit/audit.service';
 import { withSpan } from '@api/utils/tracer';
 import { cache } from '@api/services/cache.service';
+import { incrementUsage } from '../subscriptions/usage.service';
 
 const router = Router();
 router.use(authenticate);
@@ -187,14 +189,16 @@ router.get(
 router.post(
   '/',
   WRITE_ROLES,
+  checkSubscriptionLimit('patients'),
   validateRequest({ body: createPatientSchema }),
   asyncHandler(async (req: Request, res: Response) => {
     const { firstName, lastName, dateOfBirth, sex, contactNumber, address, clinicId } = req.body;
     const searchName = `${firstName} ${lastName}`.toLowerCase();
-    const systemId = await nextSystemId(clinicId || req.user!.clinicId);
+    const targetClinicId = clinicId || req.user!.clinicId;
+    const systemId = await nextSystemId(targetClinicId);
     const doc = await withSpan(
       'patient.create',
-      { 'clinic.id': clinicId || req.user!.clinicId },
+      { 'clinic.id': targetClinicId },
       async () =>
         PatientModel.create({
           systemId,
@@ -204,15 +208,16 @@ router.post(
           sex,
           contactNumber,
           address,
-          clinicId: clinicId || req.user!.clinicId,
+          clinicId: targetClinicId,
           isActive: true,
           searchName,
         })
     );
-    emitToClinic(String(clinicId || req.user!.clinicId), 'patient:created', {
+    emitToClinic(String(targetClinicId), 'patient:created', {
       patientId: String(doc._id),
     });
-    patientsCreatedTotal.inc({ clinicId: clinicId || req.user!.clinicId });
+    patientsCreatedTotal.inc({ clinicId: targetClinicId });
+    await incrementUsage(targetClinicId, 'patientCount');
     return res.status(201).json({ status: 'success', data: toPatientResponse(doc) });
   })
 );
@@ -1030,5 +1035,8 @@ router.post(
     return res.json({ status: 'success', data: { interpretation } });
   })
 );
+
+// Mount communications router
+router.use('/:id/communications', communicationsRouter);
 
 export const patientRoutes = router;

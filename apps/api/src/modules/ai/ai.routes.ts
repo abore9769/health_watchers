@@ -647,4 +647,42 @@ router.put('/triage/:id/status', authenticate, requireRoles(['CLINIC_ADMIN', 'NU
   }
 });
 
+// POST /api/v1/ai/transcribe
+router.post('/transcribe', authenticate, requireRoles('DOCTOR', 'NURSE'), async (req: Request, res: Response) => {
+  try {
+    if (!isAIServiceAvailable()) {
+      return res.status(503).json({
+        error: 'AIUnavailable',
+        message: 'AI service is not configured. Please contact your administrator.',
+      });
+    }
+
+    const { text } = req.body;
+
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'text field is required and must be a non-empty string',
+      });
+    }
+
+    const { transcribeAndCorrect } = await import('./ai.service');
+    const result = await transcribeAndCorrect(text);
+
+    return res.json({
+      status: 'success',
+      data: result,
+    });
+  } catch (error: unknown) {
+    logger.error({ err: error }, 'Transcription error');
+    if (error instanceof Error && error.message.includes('GEMINI')) {
+      return res.status(503).json({
+        error: 'AIUnavailable',
+        message: 'AI service is temporarily unavailable',
+      });
+    }
+    return res.status(500).json({ error: 'InternalServerError' });
+  }
+});
+
 export default router;

@@ -8,6 +8,41 @@ import { getUsage } from './usage.service';
 
 const router = Router();
 
+// GET /subscriptions/usage — get current clinic's usage vs limits
+router.get('/usage', authenticate, async (req: Request, res: Response) => {
+  const clinicId = req.user!.clinicId;
+  if (!clinicId) return res.status(400).json({ error: 'No clinic associated with this account' });
+
+  const [subscription, usage] = await Promise.all([
+    SubscriptionModel.findOne({ clinicId }),
+    getUsage(clinicId),
+  ]);
+
+  if (!subscription) {
+    return res.status(404).json({ error: 'Subscription not found' });
+  }
+
+  const limits = TIER_LIMITS[subscription.tier];
+  const usagePercent = {
+    patients: limits.maxPatients !== Infinity ? (usage.patientCount / limits.maxPatients) * 100 : 0,
+    encounters: limits.maxEncountersPerMonth !== Infinity ? (usage.encounterCount / limits.maxEncountersPerMonth) * 100 : 0,
+    ai: limits.maxAiRequestsPerMonth !== Infinity ? (usage.aiRequestCount / limits.maxAiRequestsPerMonth) * 100 : 0,
+    doctors: limits.maxDoctors !== Infinity ? (usage.doctorCount / limits.maxDoctors) * 100 : 0,
+    users: limits.maxDoctors !== Infinity ? (usage.userCount / limits.maxDoctors) * 100 : 0,
+  };
+
+  return res.json({
+    status: 'success',
+    data: {
+      subscription,
+      usage,
+      limits,
+      usagePercent,
+      prices: TIER_PRICES,
+    },
+  });
+});
+
 // GET /subscriptions/me — get current clinic's subscription + usage
 router.get('/me', authenticate, async (req: Request, res: Response) => {
   const clinicId = req.user!.clinicId;

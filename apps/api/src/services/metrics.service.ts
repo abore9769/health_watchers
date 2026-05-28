@@ -80,11 +80,49 @@ export const aiRequestsTotal = new client.Counter({
   registers: [register],
 });
 
+// ── Payment Expiration Job Metrics ────────────────────────────────────────────
+
+export const paymentExpirationJobErrorsTotal = new client.Counter({
+  name: 'payment_expiration_job_errors_total',
+  help: 'Total number of payment expiration job execution failures',
+  registers: [register],
+});
+
+export const paymentExpirationJobLastRunExpired = new client.Gauge({
+  name: 'payment_expiration_job_last_run_expired',
+  help: 'Number of payments expired in the most recent successful job run',
+  registers: [register],
+});
+
+export const paymentExpirationJobLastSuccessTimestamp = new client.Gauge({
+  name: 'payment_expiration_job_last_success_timestamp_seconds',
+  help: 'Unix timestamp (seconds) of the last successful payment expiration job run',
+  registers: [register],
+});
+
+export const paymentExpirationJobConsecutiveFailures = new client.Gauge({
+  name: 'payment_expiration_job_consecutive_failures',
+  help: 'Number of consecutive payment expiration job failures since last success',
+  registers: [register],
+});
+
 // ── System Metrics ────────────────────────────────────────────────────────────
 
 export const mongodbConnectionPoolSize = new client.Gauge({
   name: 'mongodb_connection_pool_size',
   help: 'MongoDB connection pool size',
+  registers: [register],
+});
+
+export const mongodbPoolWaitQueueSize = new client.Gauge({
+  name: 'mongodb_pool_wait_queue_size',
+  help: 'Number of operations waiting for a MongoDB connection from the pool',
+  registers: [register],
+});
+
+export const mongodbKeyDecryptionFailures = new client.Counter({
+  name: 'mongodb_keypair_decryption_failures_total',
+  help: 'Total number of Stellar keypair decryption failures',
   registers: [register],
 });
 

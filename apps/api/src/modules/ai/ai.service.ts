@@ -539,3 +539,63 @@ Rules:
     throw new Error(`Failed to suggest clinical codes: ${msg}`);
   }
 }
+
+// ── Voice transcription ───────────────────────────────────────────────────────
+export interface TranscriptionResult {
+  corrected: string;
+  soap: {
+    S: string;
+    O: string;
+    A: string;
+    P: string;
+  };
+}
+
+export async function transcribeAndCorrect(text: string): Promise<TranscriptionResult> {
+  if (!text || text.trim().length === 0) {
+    throw new Error('Text input is required');
+  }
+
+  const client = getGeminiClient();
+  const safeText = stripPII(text);
+
+  const prompt = `You are a medical scribe. Given raw voice transcription, correct medical terminology, expand abbreviations (e.g. SOB → shortness of breath), add punctuation, and structure the note into SOAP format.
+
+Return ONLY valid JSON (no markdown, no comments, no explanation) with this exact schema:
+{
+  "corrected": "string - the corrected and punctuated transcription",
+  "soap": {
+    "S": "string - Subjective (patient's reported symptoms)",
+    "O": "string - Objective (physical examination findings)",
+    "A": "string - Assessment (clinical assessment)",
+    "P": "string - Plan (treatment plan)"
+  }
+}
+
+Raw transcription:
+${safeText}`;
+
+  try {
+    const model = client.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      generationConfig: { responseMimeType: 'application/json' },
+    });
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
+    const jsonStr = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+    const parsed = JSON.parse(jsonStr);
+
+    return {
+      corrected: parsed.corrected || '',
+      soap: {
+        S: parsed.soap?.S || '',
+        O: parsed.soap?.O || '',
+        A: parsed.soap?.A || '',
+        P: parsed.soap?.P || '',
+      },
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(`Failed to transcribe and correct: ${msg}`);
+  }
+}

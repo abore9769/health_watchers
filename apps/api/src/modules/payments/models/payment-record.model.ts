@@ -19,6 +19,10 @@ export interface PaymentRecord {
   maxSourceAmount?: string;
   path?: string[];
   feeStrategy?: 'slow' | 'standard' | 'fast';
+  // Fee sponsorship fields
+  sponsorFees?: boolean;
+  sponsoredFeeAmount?: string;
+  feeBumpHash?: string;
   // Claimable balance fields
   claimableBalanceId?: string;
   claimableAfter?: Date;
@@ -35,10 +39,7 @@ export interface PaymentRecord {
   // Expiry fields
   expiresAt?: Date;
   paymentType?: 'immediate' | 'multisig' | 'escrow';
-  // Soroban escrow fields
-  sorobanContractId?: string;
-  escrowStatus?: 'held' | 'released' | 'cancelled';
-  escrowReleasedAt?: Date;
+  idempotencyKey?: string;
 }
 
 const paymentRecordSchema = new Schema<PaymentRecord>(
@@ -66,6 +67,10 @@ const paymentRecordSchema = new Schema<PaymentRecord>(
     maxSourceAmount: { type: String },
     path: { type: [String], default: undefined },
     feeStrategy: { type: String, enum: ['slow', 'standard', 'fast'], default: 'standard' },
+    // Fee sponsorship fields
+    sponsorFees: { type: Boolean, default: false },
+    sponsoredFeeAmount: { type: String },
+    feeBumpHash: { type: String, index: true },
     // Claimable balance fields
     claimableBalanceId: { type: String, index: true },
     claimableAfter: { type: Date },
@@ -82,10 +87,7 @@ const paymentRecordSchema = new Schema<PaymentRecord>(
     // Expiry fields
     expiresAt: { type: Date, index: true },
     paymentType: { type: String, enum: ['immediate', 'multisig', 'escrow'], default: 'immediate' },
-    // Soroban escrow fields
-    sorobanContractId: { type: String, index: true },
-    escrowStatus: { type: String, enum: ['held', 'released', 'cancelled'], default: undefined },
-    escrowReleasedAt: { type: Date },
+    idempotencyKey: { type: String, index: true, sparse: true, unique: true },
   },
   { timestamps: true, versionKey: false }
 );
@@ -95,6 +97,10 @@ paymentRecordSchema.index({ memo: 1, clinicId: 1 });
 paymentRecordSchema.index({ clinicId: 1, createdAt: -1 });        // List payments for clinic
 paymentRecordSchema.index({ clinicId: 1, status: 1 });            // Filter by status
 paymentRecordSchema.index({ txHash: 1 }, { sparse: true });       // Lookup by transaction hash
+paymentRecordSchema.index(
+  { createdAt: 1 },
+  { expireAfterSeconds: 86400, partialFilterExpression: { idempotencyKey: { $exists: true } } }
+);
 
 export const PaymentRecordModel =
   models.PaymentRecord || model<PaymentRecord>('PaymentRecord', paymentRecordSchema);

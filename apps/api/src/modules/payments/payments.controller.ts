@@ -30,6 +30,31 @@ function canReadPayments(role: string): boolean {
   );
 }
 
+/**
+ * @swagger
+ * /payments/fee-estimate:
+ *   get:
+ *     summary: Get Stellar network fee statistics
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Fee estimate data from Stellar network
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: success }
+ *                 data: { type: object }
+ *       502:
+ *         description: Stellar service error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/fee-estimate — fetch Stellar fee statistics
 router.get(
   '/fee-estimate',
@@ -43,6 +68,43 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/balance:
+ *   get:
+ *     summary: Get clinic's Stellar account balance
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Clinic Stellar account balance
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: success }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     publicKey: { type: string }
+ *                     federationAddress: { type: string, nullable: true }
+ *                     xlmBalance: { type: string }
+ *                     usdcBalance: { type: string }
+ *       404:
+ *         description: No Stellar public key configured
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       502:
+ *         description: Stellar service error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/balance — fetch clinic's Stellar account balance from stellar-service
 router.get(
   '/balance',
@@ -80,6 +142,37 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/fund:
+ *   post:
+ *     summary: Fund clinic's testnet account via Friendbot (testnet only)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Account funded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: success }
+ *                 data: { type: object }
+ *       404:
+ *         description: No Stellar public key configured
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       502:
+ *         description: Stellar service error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // POST /payments/fund — fund clinic's testnet account via Friendbot
 router.post(
   '/fund',
@@ -107,6 +200,37 @@ router.post(
   })
 );
 
+/**
+ * @swagger
+ * /payments/trustline:
+ *   post:
+ *     summary: Create USDC trustline for clinic's Stellar account
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Trustline created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: success }
+ *                 data: { type: object }
+ *       404:
+ *         description: No Stellar public key configured
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       502:
+ *         description: Stellar service error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // POST /payments/trustline — create USDC trustline for clinic's Stellar account
 router.post(
   '/trustline',
@@ -134,6 +258,53 @@ router.post(
   })
 );
 
+/**
+ * @swagger
+ * /payments:
+ *   get:
+ *     summary: List payments for the authenticated clinic (paginated)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20 }
+ *       - in: query
+ *         name: patientId
+ *         schema: { type: string }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string, enum: [pending, confirmed, failed, expired] }
+ *     responses:
+ *       200:
+ *         description: Paginated list of payment records
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/PaymentRecord'
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     page: { type: integer }
+ *                     limit: { type: integer }
+ *       403:
+ *         description: Insufficient permissions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments — paginated list scoped to the authenticated clinic
 router.get(
   '/',
@@ -164,6 +335,50 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/paths:
+ *   get:
+ *     summary: Discover Stellar payment paths between assets
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: sourceAsset
+ *         required: true
+ *         schema: { type: string, example: XLM }
+ *       - in: query
+ *         name: destinationAsset
+ *         required: true
+ *         schema: { type: string, example: USDC }
+ *       - in: query
+ *         name: amount
+ *         required: true
+ *         schema: { type: string, example: '10.0000000' }
+ *     responses:
+ *       200:
+ *         description: Available payment paths
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data: { type: array, items: { type: object } }
+ *       400:
+ *         description: Missing required query parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       502:
+ *         description: Stellar service error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/paths — discover payment paths
 router.get(
   '/paths',
@@ -194,6 +409,46 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/stellar/orderbook:
+ *   get:
+ *     summary: Get Stellar DEX orderbook for an asset pair
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: base
+ *         required: true
+ *         schema: { type: string, example: XLM }
+ *       - in: query
+ *         name: counter
+ *         required: true
+ *         schema: { type: string, example: USDC }
+ *     responses:
+ *       200:
+ *         description: Orderbook data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data: { type: object }
+ *       400:
+ *         description: Missing required query parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       502:
+ *         description: Stellar service error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/stellar/orderbook — get Stellar DEX orderbook
 router.get(
   '/stellar/orderbook',
@@ -222,6 +477,61 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/intent:
+ *   post:
+ *     summary: Create a payment intent
+ *     description: Creates a pending payment record and returns the intent ID and memo for the Stellar transaction.
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreatePaymentIntentRequest'
+ *           example:
+ *             amount: "10.0000000"
+ *             destination: "GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGZQE3NMQKK6UUUHKKOAIB"
+ *             assetCode: "XLM"
+ *             patientId: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       201:
+ *         description: Payment intent created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string, example: success }
+ *                 data:
+ *                   allOf:
+ *                     - $ref: '#/components/schemas/PaymentRecord'
+ *                     - type: object
+ *                       properties:
+ *                         platformPublicKey: { type: string }
+ *                         feeBump:
+ *                           type: object
+ *                           nullable: true
+ *                           properties:
+ *                             xdr: { type: string }
+ *                             hash: { type: string }
+ *                             feeStroops: { type: integer }
+ *       400:
+ *         description: Validation error (unsupported asset, memo too long, missing issuer)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       402:
+ *         description: Fee budget exceeded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // POST /payments/intent
 router.post(
   '/intent',
@@ -242,9 +552,25 @@ router.post(
       path,
       feeStrategy = 'standard',
       sponsorFee = false,
+      idempotencyKey,
     } = req.body;
     const intentId = randomUUID();
     const clinicId = req.user!.clinicId;
+
+    if (idempotencyKey) {
+      const existing = await PaymentRecordModel.findOne({
+        idempotencyKey,
+        clinicId,
+      }).lean();
+
+      if (existing) {
+        return res.json({
+          status: 'success',
+          data: toPaymentResponse(existing),
+          idempotent: true,
+        });
+      }
+    }
     // `currency` takes precedence over `assetCode` for convenience
     const normalizedAsset = (currency ?? String(assetCode)).toUpperCase().trim();
 
@@ -302,6 +628,7 @@ router.post(
           maxSourceAmount,
           path,
           feeStrategy,
+          idempotencyKey: idempotencyKey ?? undefined,
         })
     );
 
@@ -338,6 +665,56 @@ router.post(
   })
 );
 
+/**
+ * @swagger
+ * /payments/{intentId}/confirm:
+ *   patch:
+ *     summary: Confirm a payment intent with a Stellar transaction hash
+ *     description: Verifies the transaction on Stellar and marks the payment as confirmed. Validates memo, destination, amount, and asset.
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: intentId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ConfirmPaymentRequest'
+ *     responses:
+ *       200:
+ *         description: Payment confirmed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data:
+ *                   $ref: '#/components/schemas/PaymentRecord'
+ *       400:
+ *         description: Transaction not found, memo/destination/amount/asset mismatch
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Payment intent not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       409:
+ *         description: Payment already confirmed or transaction already used
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // PATCH /payments/:intentId/confirm
 router.patch(
   '/:intentId/confirm',
@@ -524,6 +901,41 @@ router.patch(
   })
 );
 
+/**
+ * @swagger
+ * /payments/sync:
+ *   post:
+ *     summary: Reconcile DB payments with Stellar Horizon (CLINIC_ADMIN only)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Sync completed with discrepancy report
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     synced: { type: boolean }
+ *                     discrepancies: { type: array, items: { type: object } }
+ *       403:
+ *         description: CLINIC_ADMIN role required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       502:
+ *         description: Stellar service error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // POST /payments/sync — reconcile DB with Horizon (CLINIC_ADMIN only)
 router.post(
   '/sync',
@@ -603,6 +1015,39 @@ router.post(
   })
 );
 
+/**
+ * @swagger
+ * /payments/reconciliation:
+ *   get:
+ *     summary: Get monthly reconciliation report (CLINIC_ADMIN only)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Reconciliation report for current month
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     period: { type: string, example: '2026-05' }
+ *                     totalInDB: { type: integer }
+ *                     confirmed: { type: integer }
+ *                     pending: { type: integer }
+ *                     failed: { type: integer }
+ *                     discrepancies: { type: array, items: { type: object } }
+ *       403:
+ *         description: CLINIC_ADMIN role required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/reconciliation — reconciliation report
 router.get(
   '/reconciliation',
@@ -644,6 +1089,37 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/by-memo/{memo}:
+ *   get:
+ *     summary: Look up a payment intent by Stellar memo
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: memo
+ *         required: true
+ *         schema: { type: string, example: 'HW:A1B2C3D4' }
+ *     responses:
+ *       200:
+ *         description: Payment record
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data:
+ *                   $ref: '#/components/schemas/PaymentRecord'
+ *       404:
+ *         description: No payment found with that memo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/by-memo/:memo — Look up payment intent by Stellar memo
 router.get(
   '/by-memo/:memo',
@@ -676,6 +1152,29 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/balance-snapshots:
+ *   get:
+ *     summary: Get daily balance history for the clinic (up to 90 days)
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 30, maximum: 90 }
+ *     responses:
+ *       200:
+ *         description: Array of daily balance snapshots
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data: { type: array, items: { type: object } }
+ */
 // GET /payments/balance-snapshots — fetch daily balance history for the clinic
 router.get(
   '/balance-snapshots',
@@ -694,6 +1193,43 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/analytics:
+ *   get:
+ *     summary: Get payment analytics for a date range
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: from
+ *         required: true
+ *         schema: { type: string, format: date, example: '2026-01-01' }
+ *       - in: query
+ *         name: to
+ *         required: true
+ *         schema: { type: string, format: date, example: '2026-05-31' }
+ *       - in: query
+ *         name: groupBy
+ *         schema: { type: string, enum: [day, week, month], default: month }
+ *     responses:
+ *       200:
+ *         description: Payment analytics data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data: { type: object }
+ *       400:
+ *         description: Missing or invalid date parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/analytics — fetch payment analytics
 router.get(
   '/analytics',
@@ -730,6 +1266,29 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/revenue-dashboard:
+ *   get:
+ *     summary: Get revenue dashboard data
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: months
+ *         schema: { type: integer, default: 12, maximum: 36 }
+ *     responses:
+ *       200:
+ *         description: Revenue dashboard data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data: { type: object }
+ */
 // GET /payments/revenue-dashboard — fetch revenue dashboard data
 router.get(
   '/revenue-dashboard',
@@ -748,6 +1307,32 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/{intentId}/qr:
+ *   get:
+ *     summary: Generate QR code for a payment intent
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: intentId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: format
+ *         schema: { type: string, enum: [png, svg, data-url], default: png }
+ *     responses:
+ *       200:
+ *         description: QR code image (PNG/SVG) or data URL JSON
+ *       404:
+ *         description: Payment intent not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/:intentId/qr — Generate QR code for payment intent
 router.get(
   '/:intentId/qr',
@@ -799,6 +1384,43 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/{intentId}/payment-uri:
+ *   get:
+ *     summary: Get Stellar payment URI (SEP-0007) for a payment intent
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: intentId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Stellar payment URI
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     paymentURI: { type: string }
+ *                     destination: { type: string }
+ *                     amount: { type: string }
+ *                     assetCode: { type: string }
+ *                     memo: { type: string }
+ *       404:
+ *         description: Payment intent not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/:intentId/payment-uri — Get Stellar payment URI
 router.get(
   '/:intentId/payment-uri',
@@ -846,6 +1468,41 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/{intentId}/receipt:
+ *   get:
+ *     summary: Get receipt info for a confirmed payment
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: intentId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Receipt data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     receiptUrl: { type: string }
+ *                     receiptNumber: { type: string }
+ *                     generatedAt: { type: string, format: date-time }
+ *       404:
+ *         description: Payment or receipt not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/:intentId/receipt — Download receipt PDF
 router.get(
   '/:intentId/receipt',
@@ -891,6 +1548,41 @@ router.get(
   })
 );
 
+/**
+ * @swagger
+ * /payments/{intentId}/receipt/url:
+ *   get:
+ *     summary: Get pre-signed S3 URL for a payment receipt
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: intentId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Pre-signed receipt URL (expires in 1 hour)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status: { type: string }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     receiptUrl: { type: string }
+ *                     receiptNumber: { type: string }
+ *                     expiresIn: { type: integer, example: 3600 }
+ *       404:
+ *         description: Payment or receipt not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 // GET /payments/:intentId/receipt/url — Get pre-signed S3 URL
 router.get(
   '/:intentId/receipt/url',
@@ -1067,84 +1759,114 @@ router.get(
   })
 );
 
-// ── Soroban Escrow endpoints ──────────────────────────────────────────────────
+// ── Multi-Signature Payment Endpoints ──────────────────────────────────────────
 
-// POST /api/v1/payments/:id/escrow
+// POST /payments/multisig — create a multi-signature payment request
 router.post(
-  '/:id/escrow',
-  authenticate,
-  requireRoles('CLINIC_ADMIN', 'DOCTOR'),
+  '/multisig',
+  validateRequest({ body: createPaymentIntentSchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const payment = await PaymentRecordModel.findById(id);
+    const { amount, currency, description, requiredSignatures, signers } = req.body;
+    const clinicId = req.user!.clinicId;
 
-    if (!payment) {
-      return res.status(404).json({ error: 'NotFound', message: 'Payment not found' });
-    }
-
-    if (payment.clinicId.toString() !== req.user!.clinicId.toString()) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
-    }
-
-    if (payment.paymentType !== 'escrow') {
-      return res.status(400).json({ error: 'BadRequest', message: 'Payment is not escrow type' });
+    if (!requiredSignatures || !signers || signers.length < 2) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: 'requiredSignatures and at least 2 signers are required',
+      });
     }
 
     try {
-      const { sorobanEscrowService } = await import('./services/soroban-escrow.service');
-      const escrow = await sorobanEscrowService.createEscrow({
-        paymentId: id,
-        amount: payment.amount,
-        destination: payment.destination,
-        encounterId: payment.encounterId || '',
+      const { multiSigPaymentService } = await import('./services/multisig-payment.service');
+      const { payment, multiSigPayment } = await multiSigPaymentService.createMultiSigPaymentRequest({
+        paymentId: undefined as any,
+        clinicId,
+        amount,
+        currency,
+        requiredSignatures,
+        signers,
+        description,
       });
 
-      payment.sorobanContractId = escrow.contractId;
-      payment.escrowStatus = 'held';
-      await payment.save();
+      paymentsInitiatedTotal.inc({ currency });
 
-      return res.json({ status: 'success', data: { contractId: escrow.contractId, txHash: escrow.txHash } });
+      return res.status(201).json({
+        status: 'success',
+        data: {
+          payment,
+          multiSigPayment,
+          signatureProgress: {
+            collected: 0,
+            required: requiredSignatures,
+            complete: false,
+          },
+        },
+      });
     } catch (err: any) {
-      logger.error({ error: err }, 'Failed to create escrow');
-      return res.status(500).json({ error: 'InternalError', message: err.message });
+      return res.status(400).json({ error: 'PaymentError', message: err.message });
     }
   })
 );
 
-// POST /api/v1/payments/:id/release
+// POST /payments/multisig/:paymentId/sign — add a signature to a multi-sig payment
 router.post(
-  '/:id/release',
-  authenticate,
-  requireRoles('CLINIC_ADMIN', 'DOCTOR'),
+  '/multisig/:paymentId/sign',
+  validateRequest({ body: { type: 'object', properties: { signer: { type: 'string' }, signature: { type: 'string' } }, required: ['signer', 'signature'] } as any }),
   asyncHandler(async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const payment = await PaymentRecordModel.findById(id);
-
-    if (!payment) {
-      return res.status(404).json({ error: 'NotFound', message: 'Payment not found' });
-    }
-
-    if (payment.clinicId.toString() !== req.user!.clinicId.toString()) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Access denied' });
-    }
-
-    if (!payment.sorobanContractId) {
-      return res.status(400).json({ error: 'BadRequest', message: 'No escrow contract found' });
-    }
+    const { paymentId } = req.params;
+    const { signer, signature } = req.body;
 
     try {
-      const { sorobanEscrowService } = await import('./services/soroban-escrow.service');
-      const result = await sorobanEscrowService.releaseEscrow(payment.sorobanContractId);
+      const { multiSigPaymentService } = await import('./services/multisig-payment.service');
+      const multiSigPayment = await multiSigPaymentService.addSignature(paymentId, signer, signature);
 
-      payment.escrowStatus = 'released';
-      payment.escrowReleasedAt = new Date();
-      payment.status = 'confirmed';
-      await payment.save();
-
-      return res.json({ status: 'success', data: { txHash: result.txHash } });
+      return res.json({
+        status: 'success',
+        data: {
+          multiSigPayment,
+          signatureProgress: {
+            collected: multiSigPayment.signatures.length,
+            required: multiSigPayment.requiredSignatures,
+            complete: multiSigPayment.signatures.length >= multiSigPayment.requiredSignatures,
+          },
+        },
+      });
     } catch (err: any) {
-      logger.error({ error: err }, 'Failed to release escrow');
-      return res.status(500).json({ error: 'InternalError', message: err.message });
+      return res.status(400).json({ error: 'SignatureError', message: err.message });
+    }
+  })
+);
+
+// GET /payments/multisig/:paymentId — get multi-sig payment details
+router.get(
+  '/multisig/:paymentId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { paymentId } = req.params;
+
+    try {
+      const { multiSigPaymentService } = await import('./services/multisig-payment.service');
+      const multiSigPayment = await multiSigPaymentService.getMultiSigPayment(paymentId);
+
+      return res.json({ status: 'success', data: multiSigPayment });
+    } catch (err: any) {
+      return res.status(404).json({ error: 'NotFound', message: err.message });
+    }
+  })
+);
+
+// GET /payments/multisig/pending/:signer — list pending multi-sig payments for a signer
+router.get(
+  '/multisig/pending/:signer',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { signer } = req.params;
+
+    try {
+      const { multiSigPaymentService } = await import('./services/multisig-payment.service');
+      const payments = await multiSigPaymentService.getPendingPaymentsForSigner(signer);
+
+      return res.json({ status: 'success', data: payments });
+    } catch (err: any) {
+      return res.status(400).json({ error: 'Error', message: err.message });
     }
   })
 );

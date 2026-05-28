@@ -5,6 +5,7 @@ import { stellarClient } from '../payments/services/stellar-client';
 import { isAIServiceAvailable } from '../ai/ai.service';
 import { config } from '@health-watchers/config';
 import { getDbStatus } from '../../config/db';
+import { getJobStatus, CHECK_INTERVAL_MS } from '../payments/services/payment-expiration-job';
 
 const router = Router();
 
@@ -36,7 +37,28 @@ router.get('/ready', async (req: Request, res: Response) => {
     if (mongoStatus === 1) {
       // Perform a simple ping if connected
       await mongoose.connection.db?.admin().ping();
-      checks.mongodb = { status: 'healthy', latency: Date.now() - mongoStart };
+      const pool = mongoose.connection.pool;
+      const totalConnections = pool?.totalConnectionCount ?? 0;
+      const waitQueueSize = pool?.waitQueueSize ?? 0;
+      const maxPoolSize = parseInt(process.env.MONGODB_POOL_SIZE ?? '10', 10);
+      const utilization = maxPoolSize > 0 ? totalConnections / maxPoolSize : 0;
+      const poolExhausted = waitQueueSize > 0 && totalConnections >= maxPoolSize;
+
+      if (poolExhausted) {
+        isReady = false;
+        checks.mongodb = {
+          status: 'unhealthy',
+          message: 'Connection pool exhausted',
+          pool: { totalConnections, waitQueueSize, maxPoolSize, utilization },
+          latency: Date.now() - mongoStart,
+        };
+      } else {
+        checks.mongodb = {
+          status: 'healthy',
+          pool: { totalConnections, waitQueueSize, maxPoolSize, utilization },
+          latency: Date.now() - mongoStart,
+        };
+      }
     } else {
       isReady = false;
       checks.mongodb = { 
@@ -91,6 +113,38 @@ router.get('/ready', async (req: Request, res: Response) => {
   };
 
   res.status(isReady ? 200 : 503).json(response);
+});
+
+/**
+ * GET /health/jobs - Background job health status
+ */
+router.get('/jobs', (_req: Request, res: Response) => {
+  const expiration = getJobStatus();
+  const intervalSeconds = CHECK_INTERVAL_MS / 1000;
+  const stalledThresholdSeconds = intervalSeconds * 2;
+
+  const isStalled =
+    expiration.running &&
+    expiration.lastSuccessfulRunAt !== null &&
+    (Date.now() - expiration.lastSuccessfulRunAt.getTime()) / 1000 > stalledThresholdSeconds;
+
+  const neverRan = expiration.running && expiration.lastSuccessfulRunAt === null;
+
+  return res.status(200).json({
+    status: isStalled ? 'degraded' : 'healthy',
+    jobs: {
+      paymentExpiration: {
+        running: expiration.running,
+        lastSuccessfulRunAt: expiration.lastSuccessfulRunAt?.toISOString() ?? null,
+        consecutiveFailures: expiration.consecutiveFailures,
+        intervalSeconds,
+        stalledThresholdSeconds,
+        stalled: isStalled,
+        neverRan,
+      },
+    },
+    timestamp: new Date().toISOString(),
+  });
 });
 
 export const healthRoutes = router;

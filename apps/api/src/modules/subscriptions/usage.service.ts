@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { UsageModel } from './usage.model';
 import { SubscriptionModel } from './subscription.model';
 
-type UsageField = 'patientCount' | 'encounterCount' | 'aiRequestCount' | 'doctorCount';
+type UsageField = 'patientCount' | 'encounterCount' | 'aiRequestCount' | 'doctorCount' | 'userCount';
 
 async function getCurrentPeriod(clinicId: string | Types.ObjectId) {
   const subscription = await SubscriptionModel.findOne({ clinicId });
@@ -29,13 +29,13 @@ export async function getUsage(clinicId: string | Types.ObjectId) {
   const { periodStart, periodEnd } = await getCurrentPeriod(clinicId);
 
   const usage = await UsageModel.findOne({ clinicId, periodStart, periodEnd });
-  return usage ?? { patientCount: 0, encounterCount: 0, aiRequestCount: 0, doctorCount: 0 };
+  return usage ?? { patientCount: 0, encounterCount: 0, aiRequestCount: 0, doctorCount: 0, userCount: 0 };
 }
 
 export async function resetUsageForPeriod(clinicId: string | Types.ObjectId, periodStart: Date, periodEnd: Date) {
   await UsageModel.findOneAndUpdate(
     { clinicId, periodStart, periodEnd },
-    { $set: { patientCount: 0, encounterCount: 0, aiRequestCount: 0, doctorCount: 0 } },
+    { $set: { patientCount: 0, encounterCount: 0, aiRequestCount: 0, doctorCount: 0, userCount: 0 } },
     { upsert: true }
   );
 }
