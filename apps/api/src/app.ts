@@ -115,6 +115,7 @@ import federationRouter from './modules/federation/federation.router';
 import exportRouter from './modules/export/export.routes';
 import { complianceRoutes } from './modules/compliance/compliance.controller';
 import { requestIdPropagationMiddleware } from './middlewares/request-id-propagation.middleware';
+import { breachIncidentRoutes } from './modules/breach-incidents/breach-incidents.controller';
 
 
 const app = express();
@@ -284,6 +285,7 @@ app.use('/api/v1/onboarding', onboardingRoutes);
 app.use('/api/v1/pre-auth', paymentLimiter, preAuthRoutes);
 app.use('/api/v1/peer-reviews', peerReviewsRouter);
 app.use('/api/v1/compliance', complianceRoutes);
+app.use('/api/v1/admin/breach-incidents', breachIncidentRoutes);
 
 // ── Stellar federation (public, no auth) ──────────────────────────────────────
 app.use('/.well-known', federationRouter);
