@@ -2,9 +2,13 @@ import { Router, Request, Response } from 'express';
 import { PatientModel } from './models/patient.model';
 import { PatientCounterModel } from './models/patient-counter.model';
 import { toPatientResponse } from './patients.transformer';
+import { UserModel } from '../auth/models/user.model';
+import { PortalMessageModel } from '../portal/models/portal-message.model';
+import { portalMessageCreateSchema } from '../portal/portal.validation';
+import { sendMail } from '@api/lib/email.service';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { paginate, parsePagination } from '../../utils/paginate';
-import { emitToClinic } from '@api/realtime/socket';
+import { emitToClinic, emitToUser } from '@api/realtime/socket';
 import { authenticate, requireRoles } from '@api/middlewares/auth.middleware';
 import { validateRequest } from '@api/middlewares/validate.middleware';
 import { checkSubscriptionLimit } from '@api/middlewares/subscription.middleware';
@@ -328,6 +332,96 @@ router.delete(
     );
     if (!doc) return res.status(404).json({ error: 'NotFound', message: 'Patient not found' });
     return res.json({ status: 'success', data: { id: String(doc._id), isActive: false } });
+  })
+);
+
+// POST /patients/:id/messages — staff reply to patient portal message
+router.post(
+  '/:id/messages',
+  requireStaff,
+  validateRequest({ body: portalMessageCreateSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const patient = await PatientModel.findOne({
+      _id: req.params.id,
+      clinicId: req.user!.clinicId,
+      isActive: true,
+    });
+
+    if (!patient) {
+      return res.status(404).json({ error: 'NotFound', message: 'Patient not found' });
+    }
+
+    const { subject, body, attachments, threadId, parentMessageId } = req.body as {
+      subject: string;
+      body: string;
+      attachments?: any[];
+      threadId?: string;
+      parentMessageId?: string;
+    };
+
+    const message = await PortalMessageModel.create({
+      clinicId: new Types.ObjectId(req.user!.clinicId),
+      patientId: new Types.ObjectId(req.params.id),
+      senderId: new Types.ObjectId(req.user!.userId),
+      senderRole: req.user!.role,
+      subject,
+      body,
+      direction: 'staff_to_patient',
+      threadId: threadId ? new Types.ObjectId(threadId) : new Types.ObjectId(),
+      parentMessageId: parentMessageId ? new Types.ObjectId(parentMessageId) : undefined,
+      attachments,
+    });
+
+    const patientUser = await UserModel.findOne({
+      clinicId: new Types.ObjectId(req.user!.clinicId),
+      patientId: patient._id,
+      role: 'PATIENT',
+      isActive: true,
+    }).lean();
+
+    const patientName = `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'Patient';
+
+    if (patientUser) {
+      emitToUser(String(patientUser._id), 'portal:message:new', {
+        messageId: String(message._id),
+        threadId: String(message.threadId),
+        clinicId: String(message.clinicId),
+        patientId: String(message.patientId),
+        subject: message.subject,
+        body: message.body,
+        direction: message.direction,
+        createdAt: message.createdAt,
+        senderRole: message.senderRole,
+      });
+
+      if (patientUser.email && patientUser.preferences?.emailNotifications !== false) {
+        sendMail({
+          to: patientUser.email,
+          subject: `Reply from your care team`,
+          html: `
+            <p>Hi ${patientName},</p>
+            <p>Your care team has replied to your portal message.</p>
+            <p><strong>Subject:</strong> ${message.subject}</p>
+            <p>${message.body}</p>
+            <p>Please log in to the patient portal to view the full thread.</p>
+          `,
+        }).catch(() => undefined);
+      }
+    }
+
+    emitToClinic(req.user!.clinicId, 'portal:message:new', {
+      messageId: String(message._id),
+      threadId: String(message.threadId),
+      clinicId: String(message.clinicId),
+      patientId: String(message.patientId),
+      subject: message.subject,
+      body: message.body,
+      direction: message.direction,
+      createdAt: message.createdAt,
+      senderRole: message.senderRole,
+    });
+
+    return res.status(201).json({ status: 'success', data: message });
   })
 );
 

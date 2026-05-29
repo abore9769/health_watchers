@@ -32,4 +32,32 @@ export const portalMfaDisableSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
 });
 
+export const portalMessageCreateSchema = z.object({
+  subject: z.string().min(1).max(255),
+  body: z.string().min(1),
+  attachments: z
+    .array(
+      z.object({
+        fileName: z.string().min(1),
+        url: z.string().url(),
+        mimeType: z.string().optional(),
+        size: z.number().optional(),
+      })
+    )
+    .optional(),
+  threadId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+  parentMessageId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+});
+
+export type PortalMessageCreateDto = z.infer<typeof portalMessageCreateSchema>;
+
+export const portalMessageQuerySchema = z.object({
+  page: z.string().optional(),
+  limit: z.string().optional(),
+  q: z.string().optional(),
+  threadId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+});
+
+export type PortalMessageQueryDto = z.infer<typeof portalMessageQuerySchema>;
+
 export type PortalMfaDisableDto = z.infer<typeof portalMfaDisableSchema>;
