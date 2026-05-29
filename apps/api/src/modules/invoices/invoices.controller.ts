@@ -126,8 +126,9 @@ router.get(
     const invoice = await InvoiceModel.findOne({ _id: req.params.id, clinicId: req.user!.clinicId });
     if (!invoice) return res.status(404).json({ error: 'NotFound', message: 'Invoice not found' });
 
-    const [clinic, patient] = await Promise.all([
+    const [clinic, settings, patient] = await Promise.all([
       ClinicModel.findById(req.user!.clinicId).lean(),
+      ClinicSettingsModel.findOne({ clinicId: req.user!.clinicId }).lean(),
       PatientModel.findById(invoice.patientId).lean(),
     ]);
 
@@ -136,16 +137,54 @@ router.get(
 
     const patientName = patient ? `${(patient as any).firstName} ${(patient as any).lastName}` : 'Unknown';
 
-    const pdfStream = generateInvoicePDF({
+    const pdfStream = await generateInvoicePDF({
       invoice,
-      clinicName: clinic?.name ?? 'Clinic',
-      clinicAddress: clinic?.address ?? '',
+      clinicName: settings?.branding.clinicName || clinic?.name || 'Clinic',
+      clinicAddress: settings?.branding.address || clinic?.address || '',
+      clinicPhone: settings?.branding.phone || clinic?.phone,
+      clinicTaxId: settings?.branding.taxId,
       patientName,
       qrCodeDataUrl: qrDataUrl,
+      branding: settings?.branding,
     });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    pdfStream.pipe(res);
+  }),
+);
+
+// GET /invoices/:id/preview
+router.get(
+  '/:id/preview',
+  asyncHandler(async (req: Request, res: Response) => {
+    const invoice = await InvoiceModel.findOne({ _id: req.params.id, clinicId: req.user!.clinicId });
+    if (!invoice) return res.status(404).json({ error: 'NotFound', message: 'Invoice not found' });
+
+    const [clinic, settings, patient] = await Promise.all([
+      ClinicModel.findById(req.user!.clinicId).lean(),
+      ClinicSettingsModel.findOne({ clinicId: req.user!.clinicId }).lean(),
+      PatientModel.findById(invoice.patientId).lean(),
+    ]);
+
+    const uri = stellarPayURI(invoice.stellarDestination, invoice.total, invoice.currency, invoice.stellarMemo);
+    const qrDataUrl = await buildQRDataUrl(uri);
+
+    const patientName = patient ? `${(patient as any).firstName} ${(patient as any).lastName}` : 'Unknown';
+
+    const pdfStream = await generateInvoicePDF({
+      invoice,
+      clinicName: settings?.branding.clinicName || clinic?.name || 'Clinic',
+      clinicAddress: settings?.branding.address || clinic?.address || '',
+      clinicPhone: settings?.branding.phone || clinic?.phone,
+      clinicTaxId: settings?.branding.taxId,
+      patientName,
+      qrCodeDataUrl: qrDataUrl,
+      branding: settings?.branding,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${invoice.invoiceNumber}.pdf"`);
     pdfStream.pipe(res);
   }),
 );

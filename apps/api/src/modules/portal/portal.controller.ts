@@ -11,10 +11,15 @@ import { PaymentRecordModel } from '../payments/models/payment-record.model';
 import { authenticate, requireRoles } from '@api/middlewares/auth.middleware';
 import { validateRequest } from '@api/middlewares/validate.middleware';
 import { asyncHandler } from '@api/utils/asyncHandler';
+import { paginate, parsePagination } from '@api/utils/paginate';
 import { signAccessToken, signRefreshToken, signTempToken, verifyTempToken, REFRESH_TOKEN_EXPIRY_MS } from '../auth/token.service';
 import { RefreshTokenModel } from '../auth/models/refresh-token.model';
 import { portalMfaService } from './portal-mfa.service';
 import { smsOtpService } from './sms-otp.service';
+import { PortalMessageModel } from './models/portal-message.model';
+import { portalMessageCreateSchema, portalMessageQuerySchema } from './portal.validation';
+import { emitToClinic, emitToUser } from '@api/realtime/socket';
+import { sendMail } from '@api/lib/email.service';
 import crypto from 'crypto';
 const router = Router();
 
@@ -29,6 +34,76 @@ const portalMfaVerifySchema = z.object({
 });
 
 const requirePatient = requireRoles('PATIENT');
+const requireStaff = requireRoles('DOCTOR', 'CLINIC_ADMIN', 'SUPER_ADMIN', 'NURSE');
+
+async function notifyStaffAboutPatientMessage(message: any, patientName: string) {
+  const recipients = await UserModel.find({
+    clinicId: new Types.ObjectId(String(message.clinicId)),
+    role: { $in: ['DOCTOR', 'NURSE', 'CLINIC_ADMIN', 'SUPER_ADMIN'] },
+    isActive: true,
+    'preferences.emailNotifications': true,
+  }).lean();
+
+  const payload = {
+    messageId: String(message._id),
+    threadId: String(message.threadId),
+    clinicId: String(message.clinicId),
+    patientId: String(message.patientId),
+    subject: message.subject,
+    body: message.body,
+    direction: message.direction,
+    createdAt: message.createdAt,
+    senderRole: message.senderRole,
+  };
+
+  emitToClinic(String(message.clinicId), 'portal:message:new', payload);
+
+  for (const staff of recipients) {
+    if (!staff.email) continue;
+    sendMail({
+      to: staff.email,
+      subject: `New portal message from ${patientName}`,
+      html: `
+        <p>Hello ${staff.fullName || 'Care team'},</p>
+        <p>A new secure message was sent by <strong>${patientName}</strong> through the patient portal.</p>
+        <p><strong>Subject:</strong> ${message.subject}</p>
+        <p><strong>Message:</strong></p>
+        <p>${message.body}</p>
+        <p>Please respond through the care team portal.</p>
+      `,
+    }).catch(() => undefined);
+  }
+}
+
+async function notifyPatientAboutStaffReply(message: any, patientUser: any, patientName: string) {
+  const payload = {
+    messageId: String(message._id),
+    threadId: String(message.threadId),
+    clinicId: String(message.clinicId),
+    patientId: String(message.patientId),
+    subject: message.subject,
+    body: message.body,
+    direction: message.direction,
+    createdAt: message.createdAt,
+    senderRole: message.senderRole,
+  };
+
+  emitToUser(String(patientUser._id), 'portal:message:new', payload);
+
+  if (!patientUser.email || patientUser.preferences?.emailNotifications === false) return;
+
+  sendMail({
+    to: patientUser.email,
+    subject: `Reply from your care team`,
+    html: `
+      <p>Hi ${patientName},</p>
+      <p>Your care team has replied to your portal message.</p>
+      <p><strong>Subject:</strong> ${message.subject}</p>
+      <p>${message.body}</p>
+      <p>Please log in to the patient portal to view the full thread.</p>
+    `,
+  }).catch(() => undefined);
+}
 
 // ── POST /api/v1/portal/auth/login ────────────────────────────────────────────
 router.post(
@@ -234,6 +309,80 @@ router.post(
     }
 
     return res.json({ status: 'success', data: invoice });
+  }),
+);
+
+// ── POST /api/v1/portal/messages ─────────────────────────────────────────────
+router.post(
+  '/messages',
+  authenticate,
+  requirePatient,
+  validateRequest({ body: portalMessageCreateSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clinicId, patientId, userId } = req.user!;
+    const { subject, body, attachments, threadId, parentMessageId } = req.body as {
+      subject: string;
+      body: string;
+      attachments?: any[];
+      threadId?: string;
+      parentMessageId?: string;
+    };
+
+    const patient = await PatientModel.findById(patientId).lean();
+    if (!patient) {
+      return res.status(404).json({ error: 'NotFound', message: 'Patient record not found' });
+    }
+
+    const message = await PortalMessageModel.create({
+      clinicId: new Types.ObjectId(clinicId),
+      patientId: new Types.ObjectId(patientId),
+      senderId: new Types.ObjectId(userId),
+      senderRole: 'PATIENT',
+      subject,
+      body,
+      direction: 'patient_to_staff',
+      threadId: threadId ? new Types.ObjectId(threadId) : new Types.ObjectId(),
+      parentMessageId: parentMessageId ? new Types.ObjectId(parentMessageId) : undefined,
+      attachments,
+    });
+
+    const patientName = `${(patient as any).firstName || ''} ${(patient as any).lastName || ''}`.trim() || 'Patient';
+    await notifyStaffAboutPatientMessage(message, patientName);
+
+    return res.status(201).json({ status: 'success', data: message });
+  }),
+);
+
+// ── GET /api/v1/portal/messages ──────────────────────────────────────────────
+router.get(
+  '/messages',
+  authenticate,
+  requirePatient,
+  validateRequest({ query: portalMessageQuerySchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { clinicId, patientId } = req.user!;
+    const pagination = parsePagination(req.query as Record<string, any>);
+    if (!pagination) {
+      return res.status(400).json({ error: 'ValidationError', message: 'limit must not exceed 100' });
+    }
+    const { page, limit } = pagination;
+    const { q, threadId } = req.query as { q?: string; threadId?: string };
+
+    const filter: Record<string, any> = {
+      clinicId: new Types.ObjectId(clinicId),
+      patientId: new Types.ObjectId(patientId),
+    };
+
+    if (threadId) filter.threadId = new Types.ObjectId(threadId);
+    if (q) {
+      filter.$or = [
+        { subject: { $regex: q, $options: 'i' } },
+        { body: { $regex: q, $options: 'i' } },
+      ];
+    }
+
+    const result = await paginate(PortalMessageModel, filter, page, limit, { createdAt: -1 });
+    return res.json({ status: 'success', data: result.data, meta: result.meta });
   }),
 );
 
