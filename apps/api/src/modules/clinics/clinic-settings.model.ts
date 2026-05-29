@@ -43,7 +43,15 @@ export interface IClinicSettings {
   branding: {
     clinicName: string;
     logoUrl?: string;
+    logoStorageKey?: string;
     primaryColor?: string;
+    address?: string;
+    phone?: string;
+    taxId?: string;
+    headerText?: string;
+    footerText?: string;
+    signatureName?: string;
+    signatureTitle?: string;
   };
   balanceAlerts: {
     lowBalanceWarningXlm: number;
@@ -76,7 +84,15 @@ const clinicSettingsSchema = new Schema<IClinicSettings>(
     branding: {
       clinicName: { type: String, default: '' },
       logoUrl: { type: String },
-      primaryColor: { type: String },
+      logoStorageKey: { type: String },
+      primaryColor: { type: String, default: '#2563eb' },
+      address: { type: String, default: '' },
+      phone: { type: String, default: '' },
+      taxId: { type: String, default: '' },
+      headerText: { type: String, default: '' },
+      footerText: { type: String, default: '' },
+      signatureName: { type: String, default: '' },
+      signatureTitle: { type: String, default: '' },
     },
     balanceAlerts: {
       lowBalanceWarningXlm: { type: Number, default: 100 },
