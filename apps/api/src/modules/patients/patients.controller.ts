@@ -1539,26 +1539,16 @@ router.get(
         ? Object.fromEntries((patient as any).riskFactorWeights)
         : ((patient as any).riskFactorWeights ?? {});
 
-    const totalWeight = Object.values(rawWeights).reduce((s, v) => s + v, 0) || 1;
-
-    const factorWeights = patient.riskFactors.map((factor) => {
-      const weight = rawWeights[factor] ?? 0;
-      const wasPresent = previousFactors.includes(factor);
-      // A factor that is new is "worsening"; one that disappeared would not appear here
-      const trend: 'improving' | 'stable' | 'worsening' =
-        history.length < 2 ? 'stable' : wasPresent ? 'stable' : 'worsening';
-      return {
-        factor,
-        weight,
-        percentage: Math.round((weight / totalWeight) * 100),
-        trend,
-      };
-    });
+    const { buildFactorBreakdown, getImprovedFactors } = await import('../ai/risk-calculator');
+    const factorWeights = buildFactorBreakdown(
+      patient.riskFactors,
+      rawWeights,
+      previousFactors,
+      history.length >= 2
+    );
 
     // Factors that were present before but are gone now = improving
-    const improvedFactors = previousFactors.filter(
-      (f) => !patient.riskFactors!.includes(f)
-    );
+    const improvedFactors = getImprovedFactors(patient.riskFactors, previousFactors);
 
     // Generate AI explanation + recommendations
     const { isAIServiceAvailable, AI_DISCLAIMER } = await import('../ai/ai.service');

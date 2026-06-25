@@ -98,4 +98,52 @@ export function scoreToLevel(score: number): RiskLevel {
   return 'low';
 }
 
+export type FactorTrend = 'improving' | 'stable' | 'worsening';
+
+export interface FactorBreakdown {
+  factor: string;
+  weight: number;
+  /** Share of the total weight this factor represents (0–100, rounded). */
+  percentage: number;
+  trend: FactorTrend;
+}
+
+/**
+ * Build the per-factor breakdown shown in the risk explanation: each current
+ * factor with its point weight, its percentage of the total, and a trend
+ * relative to the previous assessment.
+ *
+ * Trend rules (a factor only appears here if it's currently present):
+ *  - no prior assessment            → 'stable'
+ *  - present in the prior assessment too → 'stable'
+ *  - newly appeared since last time  → 'worsening'
+ */
+export function buildFactorBreakdown(
+  currentFactors: string[],
+  weights: Record<string, number>,
+  previousFactors: string[],
+  hasHistory: boolean
+): FactorBreakdown[] {
+  const totalWeight = Object.values(weights).reduce((s, v) => s + v, 0) || 1;
+  return currentFactors.map((factor) => {
+    const weight = weights[factor] ?? 0;
+    const wasPresent = previousFactors.includes(factor);
+    const trend: FactorTrend = !hasHistory ? 'stable' : wasPresent ? 'stable' : 'worsening';
+    return {
+      factor,
+      weight,
+      percentage: Math.round((weight / totalWeight) * 100),
+      trend,
+    };
+  });
+}
+
+/**
+ * Factors that were present in the previous assessment but are no longer
+ * present — i.e. risk factors the patient has resolved/improved on.
+ */
+export function getImprovedFactors(currentFactors: string[], previousFactors: string[]): string[] {
+  return previousFactors.filter((f) => !currentFactors.includes(f));
+}
+
 export { CHRONIC_KEYWORDS };
