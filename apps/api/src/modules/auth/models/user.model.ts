@@ -51,6 +51,7 @@ export interface User {
   failedMfaAttempts: number;
   lockedUntil?: Date; // brute-force protection
   mustChangePassword?: boolean; // Force password change on next login
+  mfaGracePeriodEndsAt?: Date; // DOCTOR/NURSE: deadline to enable MFA before login is blocked
   preferences: UserPreferences;
   stellarPublicKey?: string; // Doctor's personal Stellar wallet for payment splits
   // Portal MFA fields (for PATIENT role)
@@ -119,6 +120,12 @@ const userSchema = new Schema(
       index: true,
     },
     mustChangePassword: { type: Boolean, default: false },
+    mfaGracePeriodEndsAt: {
+      type: Date,
+      required: false,
+      default: undefined,
+      index: true,
+    },
     preferences: {
       language: { type: String, default: 'en' },
       theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },

@@ -517,6 +517,33 @@ export function sendPortalMfaBackupCodesEmail(to: string, patientName: string, b
   enqueue(to, subject, text, html);
 }
 
+/** MFA grace period reminder sent to DOCTOR/NURSE who haven't set up 2FA */
+export function sendMfaGracePeriodReminderEmail(
+  to: string,
+  name: string,
+  daysRemaining: number,
+  gracePeriodEndsAt: Date
+): void {
+  const setupUrl = `${APP_BASE_URL()}/settings/security`;
+  const deadlineStr = gracePeriodEndsAt.toLocaleDateString('en-US', {
+    year: 'numeric', month: 'long', day: 'numeric',
+  });
+  const urgency = daysRemaining === 1 ? '🚨 Last day' : `⚠️ ${daysRemaining} days remaining`;
+  const subject = `${urgency}: Set up Two-Factor Authentication — Health Watchers`;
+  const text = `Hi ${name},\n\nYour account requires two-factor authentication (2FA) to be set up by ${deadlineStr}.\n\nAfter that date, you will not be able to log in until 2FA is enabled.\n\nSet it up now: ${setupUrl}`;
+  const html = `
+    <h3>${urgency}: Two-Factor Authentication Required</h3>
+    <p>Hi <strong>${name}</strong>,</p>
+    <p>Your account requires two-factor authentication (2FA) to protect patient data.</p>
+    <p><strong>Deadline:</strong> ${deadlineStr}</p>
+    <p>After this date, you will <strong>not be able to log in</strong> until 2FA is enabled.</p>
+    <p><a href="${setupUrl}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px">Set Up 2FA Now</a></p>
+    <hr style="margin-top:32px">
+    <small style="color:#6b7280">Health Watchers — HIPAA Compliance</small>
+  `;
+  enqueue(to, subject, text, html);
+}
+
 /** Referral outcome notification sent to referring doctor */
 export function sendOutcomeNotificationEmail(
   to: string,

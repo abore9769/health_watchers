@@ -49,7 +49,8 @@ const MAX_MFA_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
 // Roles that must have 2FA enabled
-const MFA_REQUIRED_ROLES = new Set(['CLINIC_ADMIN', 'SUPER_ADMIN']);
+const MFA_REQUIRED_ROLES = new Set(['CLINIC_ADMIN', 'SUPER_ADMIN', 'DOCTOR', 'NURSE']);
+const MFA_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /** SHA-256 hash of a token for safe storage */
 function hashToken(token: string): string {
@@ -176,13 +177,44 @@ router.post(
       });
     }
 
-    // Enforce 2FA for admin roles — block login if not set up
+    // Enforce 2FA for required roles — with 7-day grace period for DOCTOR/NURSE
     if (MFA_REQUIRED_ROLES.has(user.role) && !user.mfaEnabled) {
-      return res.status(403).json({
-        error: 'MfaRequired',
-        message: '2FA is mandatory for your role. Please set up 2FA before logging in.',
-        requiresMfaSetup: true,
-        tempToken: signTempToken(user.id),
+      const now = new Date();
+
+      // Assign grace period on first login after becoming required
+      if (!user.mfaGracePeriodEndsAt) {
+        user.mfaGracePeriodEndsAt = new Date(now.getTime() + MFA_GRACE_PERIOD_MS);
+        await user.save();
+      }
+
+      // Grace period expired — block login
+      if (user.mfaGracePeriodEndsAt <= now) {
+        return res.status(403).json({
+          error: 'MfaRequired',
+          message: '2FA is mandatory for your role. Please set up 2FA to log in.',
+          requiresMfaSetup: true,
+          tempToken: signTempToken(user.id),
+        });
+      }
+
+      // Within grace period — allow login with a warning
+      const p = { userId: user.id, role: user.role, clinicId: String(user.clinicId) };
+      const { token: refreshToken, jti, family } = signRefreshToken(p);
+      await RefreshTokenModel.create({
+        jti,
+        userId: user.id,
+        family,
+        consumed: false,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
+      });
+      return res.json({
+        status: 'success',
+        data: {
+          accessToken: signAccessToken(p),
+          refreshToken,
+          warning: 'mfa_required',
+          mfaGracePeriodEndsAt: user.mfaGracePeriodEndsAt,
+        },
       });
     }
 
