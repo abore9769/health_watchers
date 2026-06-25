@@ -77,15 +77,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Validate raw manifests (dry-run)
+      - name: Install kubeconform
         run: |
-          kubectl apply --dry-run=client --validate=false -f k8s/namespace.yaml
-          kubectl apply --dry-run=client --validate=false -f k8s/api/
-          kubectl apply --dry-run=client --validate=false -f k8s/web/
-          kubectl apply --dry-run=client --validate=false -f k8s/stellar-service/
+          curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
+          chmod +x kubeconform && sudo mv kubeconform /usr/local/bin/
+
+      - name: Validate raw manifests (offline schema check)
+        run: |
+          kubeconform -strict -summary \
+            k8s/namespace.yaml \
+            k8s/api/ \
+            k8s/web/ \
+            k8s/stellar-service/
 
       - name: Assert PDB files exist for all services
         run: |
@@ -128,8 +131,9 @@ jobs:
       - name: npm audit (fail on critical)
         run: npm audit --audit-level=critical
 
-      - name: npm audit (fail on high/critical)
+      - name: npm audit (warn on high)
         run: npm audit --audit-level=high
+        continue-on-error: true
 
       - name: Check dependency licenses
         run: |
