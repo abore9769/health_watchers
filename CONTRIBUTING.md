@@ -497,6 +497,12 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) speci
 
 See [Conventional Commits](https://www.conventionalcommits.org/) for details on valid types and structure.
 
+### Pull Request Titles
+
+Because pull requests are squash-merged, **the PR title becomes the commit subject on `main`** and feeds the automated changelog/release tooling. PR titles must therefore also follow the Conventional Commits format (e.g. `feat(patients): add insurance tab`).
+
+This is enforced in CI by the **Lint PR Title** workflow, which runs `commitlint` against the PR title whenever it is opened or edited. A non-conforming title will fail the check until it is corrected.
+
 ## Release Process
 
 We use [Changesets](https://github.com/changesets/changesets) for automated versioning and release management. For details, see [docs/RELEASE.md](docs/RELEASE.md).
