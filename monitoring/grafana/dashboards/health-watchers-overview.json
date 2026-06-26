@@ -135,9 +135,7 @@
         "reduceOptions": {
           "values": false,
           "fields": "",
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "showThresholdLabels": false,
         "showThresholdMarkers": true
@@ -272,9 +270,7 @@
         "reduceOptions": {
           "values": false,
           "fields": "",
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "text": {},
         "textMode": "auto"
@@ -298,10 +294,7 @@
   ],
   "schemaVersion": 27,
   "style": "dark",
-  "tags": [
-    "health-watchers",
-    "overview"
-  ],
+  "tags": ["health-watchers", "overview"],
   "templating": {
     "list": []
   },

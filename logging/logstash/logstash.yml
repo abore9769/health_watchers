@@ -8,12 +8,12 @@ pipeline.batch.size: 125
 pipeline.batch.delay: 5
 
 # HTTP API
-http.host: "0.0.0.0"
+http.host: '0.0.0.0'
 http.port: 9600
 
 # Monitoring
 monitoring.enabled: true
-monitoring.elasticsearch.hosts: ["http://elasticsearch:9200"]
+monitoring.elasticsearch.hosts: ['http://elasticsearch:9200']
 
 # Pipeline reload
 config.reload.automatic: true

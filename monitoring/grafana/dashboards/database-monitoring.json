@@ -76,10 +76,7 @@
       "id": 2,
       "options": {
         "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
+          "calcs": ["mean", "max"],
           "displayMode": "table",
           "placement": "right"
         },
@@ -144,9 +141,7 @@
         "reduceOptions": {
           "values": false,
           "fields": "",
-          "calcs": [
-            "lastNotNull"
-          ]
+          "calcs": ["lastNotNull"]
         },
         "showThresholdLabels": false,
         "showThresholdMarkers": true
@@ -223,9 +218,7 @@
       "id": 4,
       "options": {
         "legend": {
-          "calcs": [
-            "max"
-          ],
+          "calcs": ["max"],
           "displayMode": "list",
           "placement": "bottom"
         },
@@ -247,11 +240,7 @@
   ],
   "schemaVersion": 27,
   "style": "dark",
-  "tags": [
-    "health-watchers",
-    "database",
-    "mongodb"
-  ],
+  "tags": ["health-watchers", "database", "mongodb"],
   "templating": {
     "list": []
   },

@@ -135,7 +135,7 @@ services:
     container_name: health-watchers-mongodb-exporter
     restart: always
     environment:
-      MONGODB_URI: "mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb-primary:27017/admin"
+      MONGODB_URI: 'mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb-primary:27017/admin'
     ports:
       - '9216:9216'
     depends_on:

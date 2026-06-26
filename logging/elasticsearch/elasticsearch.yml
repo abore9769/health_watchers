@@ -14,7 +14,7 @@ path.data: /usr/share/elasticsearch/data
 path.logs: /usr/share/elasticsearch/logs
 
 # Index management
-action.auto_create_index: "+health-watchers-*,-*"
+action.auto_create_index: '+health-watchers-*,-*'
 indices.memory.index_buffer_size: 30%
 
 # Performance tuning

@@ -76,10 +76,7 @@
       "id": 2,
       "options": {
         "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
+          "calcs": ["mean", "max"],
           "displayMode": "table",
           "placement": "right"
         },
@@ -156,11 +153,7 @@
       "id": 3,
       "options": {
         "legend": {
-          "calcs": [
-            "mean",
-            "max",
-            "min"
-          ],
+          "calcs": ["mean", "max", "min"],
           "displayMode": "table",
           "placement": "right"
         },
@@ -247,9 +240,7 @@
       "id": 4,
       "options": {
         "legend": {
-          "calcs": [
-            "sum"
-          ],
+          "calcs": ["sum"],
           "displayMode": "table",
           "placement": "right"
         },
@@ -271,11 +262,7 @@
   ],
   "schemaVersion": 27,
   "style": "dark",
-  "tags": [
-    "health-watchers",
-    "api",
-    "performance"
-  ],
+  "tags": ["health-watchers", "api", "performance"],
   "templating": {
     "list": []
   },

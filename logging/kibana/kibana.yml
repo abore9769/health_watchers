@@ -4,18 +4,18 @@
 
 # Server settings
 server.name: health-watchers-kibana
-server.host: "0.0.0.0"
+server.host: '0.0.0.0'
 server.port: 5601
-server.basePath: ""
+server.basePath: ''
 server.rewriteBasePath: false
 
 # Elasticsearch connection
-elasticsearch.hosts: ["http://elasticsearch:9200"]
+elasticsearch.hosts: ['http://elasticsearch:9200']
 elasticsearch.username: elastic
 elasticsearch.password: changeme
 
 # Kibana user settings
-kibana.defaultAppId: "discover"
+kibana.defaultAppId: 'discover'
 kibana.autocomplete.valueSuggestionTimeout: 1000
 
 # Logging
