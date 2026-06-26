@@ -30,7 +30,7 @@ const FALLBACK_RATES: Record<string, Record<string, number>> = {
 
 class ExchangeRateManager {
   private cache: Map<string, CachedExchangeRate> = new Map();
-  private refreshInterval: NodeJS.Timer | null = null;
+  private refreshInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
    * Get cache key for currency pair
@@ -52,7 +52,10 @@ class ExchangeRateManager {
 
     try {
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${fromId}&vs_currencies=${toId.toLowerCase()}`;
-      const response = await fetch(url, { timeout: 5000 });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
 
       if (!response.ok) {
         throw new Error(`CoinGecko API error: ${response.statusText}`);

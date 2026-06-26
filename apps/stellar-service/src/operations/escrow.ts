@@ -32,10 +32,7 @@ export interface ClaimableBalanceRecord {
   id: string;
   amount: string;
   asset: string;
-  claimants: Array<{
-    destination: string;
-    predicate?: Record<string, unknown>;
-  }>;
+  claimants: any[];
   lastModifiedLedger: number;
   lastModifiedTime: string;
 }
@@ -186,7 +183,7 @@ export async function getClaimableBalances(
       asset: record.asset,
       claimants: record.claimants,
       lastModifiedLedger: record.last_modified_ledger,
-      lastModifiedTime: record.last_modified_time,
+      lastModifiedTime: record.last_modified_time || record.created_at || new Date().toISOString(),
     }));
   } catch (error) {
     logger.error(
@@ -217,7 +214,7 @@ export async function getClaimableBalanceById(
       asset: response.asset,
       claimants: response.claimants,
       lastModifiedLedger: response.last_modified_ledger,
-      lastModifiedTime: response.last_modified_time,
+      lastModifiedTime: (response as any).last_modified_time || (response as any).created_at || new Date().toISOString(),
     };
   } catch (error: any) {
     if (error.response?.status === 404) {
@@ -263,7 +260,7 @@ export async function getRefundableBalances(
       asset: record.asset,
       claimants: record.claimants,
       lastModifiedLedger: record.last_modified_ledger,
-      lastModifiedTime: record.last_modified_time,
+      lastModifiedTime: record.last_modified_time || record.created_at || new Date().toISOString(),
     }));
   } catch (error) {
     logger.error(
