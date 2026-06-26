@@ -57,10 +57,7 @@ class PaymentStateMachine {
 
     if (!this.isValidTransition(currentState, newState)) {
       const error = `Invalid state transition from ${currentState} to ${newState}`;
-      logger.error(
-        { paymentId, currentState, newState, error },
-        'Invalid state transition'
-      );
+      logger.error({ paymentId, currentState, newState, error }, 'Invalid state transition');
       throw new Error(error);
     }
 
@@ -113,10 +110,7 @@ class PaymentStateMachine {
   /**
    * Rollback a failed payment with validation
    */
-  async rollback(
-    context: PaymentStateContext,
-    reason: string
-  ): Promise<PaymentStateContext> {
+  async rollback(context: PaymentStateContext, reason: string): Promise<PaymentStateContext> {
     if (context.state !== PaymentState.FAILED && context.state !== PaymentState.SUBMITTED) {
       throw new Error(
         `Cannot rollback payment in state ${context.state}. Only FAILED or SUBMITTED payments can be rolled back.`
@@ -151,9 +145,7 @@ class PaymentStateMachine {
    * Check if payment is in final state
    */
   isInFinalState(state: PaymentState): boolean {
-    return [PaymentState.CONFIRMED, PaymentState.FAILED, PaymentState.ROLLED_BACK].includes(
-      state
-    );
+    return [PaymentState.CONFIRMED, PaymentState.FAILED, PaymentState.ROLLED_BACK].includes(state);
   }
 
   /**

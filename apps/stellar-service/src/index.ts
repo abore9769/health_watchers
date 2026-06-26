@@ -577,17 +577,21 @@ app.get('/payment-state-machine/validate', (req, res) => {
       return res.status(400).json({ error: 'from and to query parameters are required' });
     }
 
-    const isValid = paymentStateMachine.isValidTransition(
-      from as PaymentState,
-      to as PaymentState
-    );
+    const isValid = paymentStateMachine.isValidTransition(from as PaymentState, to as PaymentState);
 
     return res.json({
       success: true,
       from,
       to,
       isValid,
-      validTransitions: ['PENDING->SUBMITTED', 'SUBMITTED->CONFIRMED', 'SUBMITTED->FAILED', 'PENDING->FAILED', 'FAILED->ROLLED_BACK', 'SUBMITTED->ROLLED_BACK'],
+      validTransitions: [
+        'PENDING->SUBMITTED',
+        'SUBMITTED->CONFIRMED',
+        'SUBMITTED->FAILED',
+        'PENDING->FAILED',
+        'FAILED->ROLLED_BACK',
+        'SUBMITTED->ROLLED_BACK',
+      ],
     });
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
@@ -597,11 +601,19 @@ app.get('/payment-state-machine/validate', (req, res) => {
 // ✅ PROTECTED: POST /escrow/create — Create escrow with refund capability
 app.post('/escrow/create', requireSecret, checkCircuitBreakerMiddleware, async (req, res) => {
   try {
-    const { fromPublicKey, claimantPublicKey, refundPublicKey, amount, claimableAfter, claimableUntil } = req.body;
+    const {
+      fromPublicKey,
+      claimantPublicKey,
+      refundPublicKey,
+      amount,
+      claimableAfter,
+      claimableUntil,
+    } = req.body;
 
     if (!fromPublicKey || !claimantPublicKey || !refundPublicKey || !amount || !claimableUntil) {
       return res.status(400).json({
-        error: 'fromPublicKey, claimantPublicKey, refundPublicKey, amount, and claimableUntil are required',
+        error:
+          'fromPublicKey, claimantPublicKey, refundPublicKey, amount, and claimableUntil are required',
       });
     }
 
@@ -644,85 +656,103 @@ app.post('/escrow/create', requireSecret, checkCircuitBreakerMiddleware, async (
 });
 
 // ✅ PROTECTED: POST /escrow/:balanceId/claim — Claim escrow funds
-app.post('/escrow/:balanceId/claim', requireSecret, checkCircuitBreakerMiddleware, async (req, res) => {
-  try {
-    const { balanceId } = req.params;
-    const { claimerPublicKey } = req.body;
+app.post(
+  '/escrow/:balanceId/claim',
+  requireSecret,
+  checkCircuitBreakerMiddleware,
+  async (req, res) => {
+    try {
+      const { balanceId } = req.params;
+      const { claimerPublicKey } = req.body;
 
-    if (!claimerPublicKey) {
-      return res.status(400).json({ error: 'claimerPublicKey is required' });
+      if (!claimerPublicKey) {
+        return res.status(400).json({ error: 'claimerPublicKey is required' });
+      }
+
+      const server = getHorizonServer();
+      const claimerKeypair = Keypair.fromPublicKey(claimerPublicKey);
+      const claimerAccount = await server.loadAccount(claimerPublicKey);
+      const fee = await server.fetchBaseFee();
+
+      const tx = claimEscrow({
+        claimerAccount,
+        balanceId: decodeURIComponent(balanceId),
+        networkPassphrase: getNetworkPassphrase(),
+        baseFee: String(fee),
+      });
+
+      if (stellarConfig.stellarSecretKey) {
+        const platformKeypair = Keypair.fromSecret(stellarConfig.stellarSecretKey);
+        tx.sign(platformKeypair);
+      }
+
+      if (stellarConfig.dryRun) {
+        return res.json({
+          success: true,
+          txHash: `dry-run-claim-escrow-${Date.now()}`,
+          dryRun: true,
+        });
+      }
+
+      const result = await server.submitTransaction(tx);
+      recordSuccess();
+      return res.json({ success: true, txHash: result.hash });
+    } catch (error: any) {
+      recordFailure();
+      const horizonError = parseHorizonError(error);
+      return res.status(horizonError.statusCode).json(horizonError);
     }
-
-    const server = getHorizonServer();
-    const claimerKeypair = Keypair.fromPublicKey(claimerPublicKey);
-    const claimerAccount = await server.loadAccount(claimerPublicKey);
-    const fee = await server.fetchBaseFee();
-
-    const tx = claimEscrow({
-      claimerAccount,
-      balanceId: decodeURIComponent(balanceId),
-      networkPassphrase: getNetworkPassphrase(),
-      baseFee: String(fee),
-    });
-
-    if (stellarConfig.stellarSecretKey) {
-      const platformKeypair = Keypair.fromSecret(stellarConfig.stellarSecretKey);
-      tx.sign(platformKeypair);
-    }
-
-    if (stellarConfig.dryRun) {
-      return res.json({ success: true, txHash: `dry-run-claim-escrow-${Date.now()}`, dryRun: true });
-    }
-
-    const result = await server.submitTransaction(tx);
-    recordSuccess();
-    return res.json({ success: true, txHash: result.hash });
-  } catch (error: any) {
-    recordFailure();
-    const horizonError = parseHorizonError(error);
-    return res.status(horizonError.statusCode).json(horizonError);
   }
-});
+);
 
 // ✅ PROTECTED: POST /escrow/:balanceId/refund — Refund escrow after expiration
-app.post('/escrow/:balanceId/refund', requireSecret, checkCircuitBreakerMiddleware, async (req, res) => {
-  try {
-    const { balanceId } = req.params;
-    const { refunderPublicKey } = req.body;
+app.post(
+  '/escrow/:balanceId/refund',
+  requireSecret,
+  checkCircuitBreakerMiddleware,
+  async (req, res) => {
+    try {
+      const { balanceId } = req.params;
+      const { refunderPublicKey } = req.body;
 
-    if (!refunderPublicKey) {
-      return res.status(400).json({ error: 'refunderPublicKey is required' });
+      if (!refunderPublicKey) {
+        return res.status(400).json({ error: 'refunderPublicKey is required' });
+      }
+
+      const server = getHorizonServer();
+      const refunderAccount = await server.loadAccount(refunderPublicKey);
+      const fee = await server.fetchBaseFee();
+
+      const tx = refundEscrow({
+        refunderAccount,
+        balanceId: decodeURIComponent(balanceId),
+        networkPassphrase: getNetworkPassphrase(),
+        baseFee: String(fee),
+      });
+
+      if (stellarConfig.stellarSecretKey) {
+        const platformKeypair = Keypair.fromSecret(stellarConfig.stellarSecretKey);
+        tx.sign(platformKeypair);
+      }
+
+      if (stellarConfig.dryRun) {
+        return res.json({
+          success: true,
+          txHash: `dry-run-refund-escrow-${Date.now()}`,
+          dryRun: true,
+        });
+      }
+
+      const result = await server.submitTransaction(tx);
+      recordSuccess();
+      return res.json({ success: true, txHash: result.hash });
+    } catch (error: any) {
+      recordFailure();
+      const horizonError = parseHorizonError(error);
+      return res.status(horizonError.statusCode).json(horizonError);
     }
-
-    const server = getHorizonServer();
-    const refunderAccount = await server.loadAccount(refunderPublicKey);
-    const fee = await server.fetchBaseFee();
-
-    const tx = refundEscrow({
-      refunderAccount,
-      balanceId: decodeURIComponent(balanceId),
-      networkPassphrase: getNetworkPassphrase(),
-      baseFee: String(fee),
-    });
-
-    if (stellarConfig.stellarSecretKey) {
-      const platformKeypair = Keypair.fromSecret(stellarConfig.stellarSecretKey);
-      tx.sign(platformKeypair);
-    }
-
-    if (stellarConfig.dryRun) {
-      return res.json({ success: true, txHash: `dry-run-refund-escrow-${Date.now()}`, dryRun: true });
-    }
-
-    const result = await server.submitTransaction(tx);
-    recordSuccess();
-    return res.json({ success: true, txHash: result.hash });
-  } catch (error: any) {
-    recordFailure();
-    const horizonError = parseHorizonError(error);
-    return res.status(horizonError.statusCode).json(horizonError);
   }
-});
+);
 
 // ✅ PUBLIC: GET /escrow/:balanceId — Get escrow balance details
 app.get('/escrow/:balanceId', async (req, res) => {

@@ -125,7 +125,9 @@ export class MainnetSafetyManager {
     // Mainnet specific checks
     if (this.isMainnet()) {
       if (!stellarConfig.mainnetConfirmed) {
-        result.errors.push('Mainnet operation requires MAINNET_CONFIRMED=true environment variable');
+        result.errors.push(
+          'Mainnet operation requires MAINNET_CONFIRMED=true environment variable'
+        );
         result.passed = false;
       }
 

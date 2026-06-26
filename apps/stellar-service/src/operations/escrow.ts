@@ -103,10 +103,7 @@ export function createEscrow(params: EscrowParams): StellarSdk.Transaction {
     .setTimeout(30)
     .build();
 
-  logger.debug(
-    { operation: 'createEscrow', balanceId: 'pending' },
-    'Escrow transaction built'
-  );
+  logger.debug({ operation: 'createEscrow', balanceId: 'pending' }, 'Escrow transaction built');
 
   return transaction;
 }
@@ -214,7 +211,10 @@ export async function getClaimableBalanceById(
       asset: response.asset,
       claimants: response.claimants,
       lastModifiedLedger: response.last_modified_ledger,
-      lastModifiedTime: (response as any).last_modified_time || (response as any).created_at || new Date().toISOString(),
+      lastModifiedTime:
+        (response as any).last_modified_time ||
+        (response as any).created_at ||
+        new Date().toISOString(),
     };
   } catch (error: any) {
     if (error.response?.status === 404) {

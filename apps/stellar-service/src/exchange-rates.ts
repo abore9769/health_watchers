@@ -131,10 +131,7 @@ class ExchangeRateManager {
 
       this.cache.set(cacheKey, exchangeRate);
 
-      logger.info(
-        { from, to, rate, source: 'coingecko' },
-        'Fetched and cached exchange rate'
-      );
+      logger.info({ from, to, rate, source: 'coingecko' }, 'Fetched and cached exchange rate');
 
       return {
         from,
@@ -144,10 +141,7 @@ class ExchangeRateManager {
         source: 'coingecko',
       };
     } catch (error) {
-      logger.warn(
-        { from, to, error: (error as any)?.message },
-        'Failed to fetch rate from API'
-      );
+      logger.warn({ from, to, error: (error as any)?.message }, 'Failed to fetch rate from API');
 
       // Use fallback rate
       const fallbackRate = FALLBACK_RATES[from]?.[to];
@@ -220,10 +214,7 @@ class ExchangeRateManager {
     const promises = currencyPairs.map((pair) => {
       const [from, to] = pair.split('/');
       return this.refreshRate(from, to).catch((error) => {
-        logger.warn(
-          { from, to, error: (error as any)?.message },
-          'Failed to refresh rate'
-        );
+        logger.warn({ from, to, error: (error as any)?.message }, 'Failed to refresh rate');
       });
     });
 
@@ -243,10 +234,7 @@ class ExchangeRateManager {
 
     this.refreshInterval = setInterval(() => {
       this.refreshAllRates().catch((error) => {
-        logger.error(
-          { error: (error as any)?.message },
-          'Periodic rate refresh failed'
-        );
+        logger.error({ error: (error as any)?.message }, 'Periodic rate refresh failed');
       });
     }, intervalMs);
   }
