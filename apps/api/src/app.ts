@@ -109,6 +109,9 @@ import { v2Router } from './routes/v2';
 import { SocketService } from './services/socket.service';
 import scheduleRoutes from './modules/schedules/schedules.routes';
 import { requestAuditMiddleware } from './middlewares/request-audit.middleware';
+// npm install cookie-parser @types/cookie-parser
+import cookieParser from 'cookie-parser';
+import { csrfMiddleware } from './middlewares/csrf.middleware';
 import cdsRoutes from './modules/cds/cds.controller';
 import { seedBuiltInRules } from './modules/cds/cds-seed';
 import onboardingRoutes from './modules/clinics/onboarding.routes';
@@ -170,21 +173,19 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
   .map((o) => o.trim())
   .filter(Boolean);
 
-const corsOptions: cors.CorsOptions = {
-  origin: (origin, callback) => {
-    // Allow server-to-server requests (no origin) and listed origins
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin '${origin}' not allowed`));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
-  exposedHeaders: ['X-Request-ID', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
-};
-
-app.use(cors(corsOptions));
-// Handle preflight with the same options so credentials and allowed-origins are consistent
-app.options('*', cors(corsOptions));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow server-to-server requests (no origin) and listed origins
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS: origin '${origin}' not allowed`));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+  })
+);
+app.options('*', cors());
 
 // ── HTTP request logging with correlation ID ──────────────────────────────────
 const isProd = process.env.NODE_ENV === 'production';
@@ -207,10 +208,12 @@ app.use(
 app.use(requestIdPropagationMiddleware);
 
 // ── Body parsing & sanitization ───────────────────────────────────────────────
+app.use(cookieParser());
 app.use(express.json({ limit: standardLimit }));
 app.use(express.urlencoded({ extended: true, limit: standardLimit }));
 app.use(mongoSanitize({ replaceWith: '_' }));
 app.use(requestAuditMiddleware);
+app.use(csrfMiddleware);
 
 // ── Content-Type validation (issue #351) ──────────────────────────────────────
 // Reject non-JSON bodies on mutating requests (POST/PUT/PATCH)
